@@ -228,6 +228,30 @@ def test_unknown_job_is_404(client):
     assert client.get("/v1/edit-jobs/job_doesnotexist", headers=HEADERS).status_code == 404
 
 
+def test_jobstore_migrates_v01_database(tmp_path):
+    """Databases created before the 'mode' column existed must still work."""
+    import sqlite3
+
+    from scalpel.api.jobs import JobStore
+
+    db = tmp_path / "old.db"
+    with sqlite3.connect(db) as conn:
+        conn.execute(
+            "CREATE TABLE jobs (id TEXT PRIMARY KEY, tenant TEXT NOT NULL,"
+            " model_id TEXT NOT NULL, bias_name TEXT NOT NULL, status TEXT NOT NULL,"
+            " created_at TEXT NOT NULL, updated_at TEXT NOT NULL, error TEXT,"
+            " artifact_dir TEXT, report_json TEXT)"
+        )
+        conn.execute(
+            "INSERT INTO jobs VALUES ('job_old', 'acme', 'm', 'b', 'succeeded',"
+            " '2026-08-04T00:00:00', '2026-08-04T00:00:00', NULL, NULL, NULL)"
+        )
+
+    store = JobStore(db)
+    rows = store.list_for_tenant("acme")
+    assert rows[0]["mode"] == "edit"  # backfilled default
+
+
 def test_artifact_packaging(tmp_path):
     """HTML report + weights zip are written next to saved artifacts."""
     from scalpel.api.jobs import JobRunner

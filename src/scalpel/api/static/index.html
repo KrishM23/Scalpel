@@ -3,243 +3,684 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Scalpel — Model Editing Console</title>
+<title>Scalpel — Bias Operations</title>
 <style>
   :root {
-    --bg: #0b0e14; --panel: #131824; --border: #232b3d; --text: #e6e9f0;
-    --muted: #8b94a8; --accent: #5b8cff; --good: #34d399; --bad: #f87171;
-    --warn: #fbbf24;
+    --bg: #0a0d12; --bg2: #0d1117; --panel: #10151d; --panel2: #131a24;
+    --border: #1b2330; --border2: #242f40;
+    --text: #dfe6f0; --muted: #6b7689; --muted2: #8b96aa;
+    --accent: #2dd4bf; --accent-dim: rgba(45, 212, 191, 0.12);
+    --green: #4ade80; --green-dim: rgba(74, 222, 128, 0.1);
+    --amber: #fbbf24; --amber-dim: rgba(251, 191, 36, 0.1);
+    --red: #f87171; --red-dim: rgba(248, 113, 113, 0.1);
+    --purple: #a78bfa; --blue: #60a5fa;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
   }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text);
-         font: 15px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; }
-  header { padding: 20px 32px; border-bottom: 1px solid var(--border);
-           display: flex; align-items: baseline; gap: 14px; }
-  header h1 { font-size: 20px; margin: 0; letter-spacing: 0.5px; }
-  header span { color: var(--muted); font-size: 13px; }
-  main { max-width: 1100px; margin: 0 auto; padding: 24px 32px;
-         display: grid; grid-template-columns: 360px 1fr; gap: 24px; }
-  .panel { background: var(--panel); border: 1px solid var(--border);
-           border-radius: 10px; padding: 20px; }
-  .panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px;
-              color: var(--muted); margin: 0 0 14px; }
-  label { display: block; font-size: 12px; color: var(--muted); margin: 12px 0 4px; }
-  input, select { width: 100%; padding: 8px 10px; border-radius: 6px;
-    border: 1px solid var(--border); background: #0e1320; color: var(--text); }
-  button { margin-top: 16px; width: 100%; padding: 10px; border: 0;
-    border-radius: 6px; background: var(--accent); color: white;
-    font-weight: 600; cursor: pointer; }
-  button:disabled { opacity: 0.5; cursor: default; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
-  th { color: var(--muted); font-weight: 500; }
-  tr.job { cursor: pointer; }
-  tr.job:hover { background: #182034; }
-  .status { padding: 2px 8px; border-radius: 10px; font-size: 12px; }
-  .status.queued    { background: #2a3350; color: var(--warn); }
-  .status.running   { background: #2a3350; color: var(--accent); }
-  .status.succeeded { background: #123527; color: var(--good); }
-  .status.failed    { background: #3a1a1a; color: var(--bad); }
-  #detail { margin-top: 24px; }
-  .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; }
-  .metric { background: #0e1320; border: 1px solid var(--border);
-            border-radius: 8px; padding: 12px; }
-  .metric .value { font-size: 22px; font-weight: 700; }
-  .metric .label { font-size: 11px; color: var(--muted); }
-  .good { color: var(--good); } .bad { color: var(--bad); }
-  #error { color: var(--bad); font-size: 13px; margin-top: 10px; min-height: 18px; }
-  .sub { color: var(--muted); font-size: 13px; }
-  a { text-decoration: none; }
-  .empty { color: var(--muted); font-size: 13px; padding: 20px 0; text-align: center; }
+  * { box-sizing: border-box; margin: 0; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg); color: var(--text); overflow: hidden;
+    font: 14px/1.5 -apple-system, "Inter", "Segoe UI", Roboto, sans-serif;
+    display: grid; grid-template-columns: 232px 1fr;
+  }
+  ::selection { background: var(--accent-dim); }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+  a { color: var(--accent); text-decoration: none; }
+  input, select {
+    width: 100%; padding: 7px 10px; border-radius: 7px; font-size: 13px;
+    border: 1px solid var(--border); background: var(--bg2); color: var(--text);
+    outline: none; transition: border-color .15s ease;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+  label { display: block; font-size: 11px; color: var(--muted); margin: 12px 0 5px;
+          text-transform: uppercase; letter-spacing: .07em; }
+
+  /* ---------------- sidebar ---------------- */
+  aside {
+    background: var(--bg2); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; padding: 16px 12px; gap: 4px;
+    animation: fadeIn .4s ease both;
+  }
+  .brand { display: flex; align-items: center; gap: 8px; padding: 4px 8px 14px; }
+  .brand .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
+                box-shadow: 0 0 10px var(--accent); }
+  .brand b { font-size: 15px; letter-spacing: .12em; }
+  .brand .ver { margin-left: auto; font: 10px var(--mono); color: var(--muted);
+                border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; }
+  .tenantbox {
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px; background: var(--panel);
+  }
+  .tenantbox .name { font-size: 13px; font-weight: 600; }
+  .plan-pill { font: 10px var(--mono); text-transform: uppercase; color: var(--accent);
+               border: 1px solid rgba(45,212,191,.35); border-radius: 4px; padding: 1px 6px; }
+  .searchwrap { position: relative; margin-bottom: 12px; }
+  .searchwrap input { padding-left: 28px; font-family: var(--mono); font-size: 12px; }
+  .searchwrap::before { content: "⌕"; position: absolute; left: 10px; top: 6px;
+                        color: var(--muted); font-size: 14px; }
+  .navsec { font-size: 10px; letter-spacing: .12em; color: var(--muted);
+            padding: 12px 8px 5px; text-transform: uppercase; }
+  .nav a {
+    display: flex; align-items: center; gap: 9px; color: var(--muted2);
+    padding: 7px 9px; border-radius: 7px; font-size: 13px; cursor: pointer;
+    transition: background .15s ease, color .15s ease;
+  }
+  .nav a:hover { background: var(--panel2); color: var(--text); }
+  .nav a.active { background: var(--accent-dim); color: var(--accent); }
+  .nav .badge { margin-left: auto; background: var(--red); color: #16090b;
+                font: 700 10px var(--mono); border-radius: 8px; padding: 1px 6px; }
+  .benchlist a { font-family: var(--mono); font-size: 12px; }
+  .benchlist .bdot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .sidebar-bottom { margin-top: auto; }
+  .connection { border-top: 1px solid var(--border); padding-top: 12px; }
+  .conn-status { display: flex; align-items: center; gap: 7px; font: 11px var(--mono);
+                 color: var(--muted); padding: 8px 2px 0; }
+  .conn-status .cdot { width: 7px; height: 7px; border-radius: 50%; background: var(--red); }
+  .conn-status .cdot.on { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .userbox { display: flex; align-items: center; gap: 9px; padding: 12px 6px 2px; }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--panel2);
+            border: 1px solid var(--border2); display: grid; place-items: center;
+            font: 600 11px var(--mono); color: var(--accent); }
+  .userbox .un { font-size: 12px; font-weight: 600; }
+  .userbox .ue { font-size: 11px; color: var(--muted); }
+
+  /* ---------------- main ---------------- */
+  main { overflow-y: auto; height: 100vh; }
+  .urlbar { position: sticky; top: 0; z-index: 5; background: rgba(10,13,18,.85);
+            backdrop-filter: blur(8px); border-bottom: 1px solid var(--border);
+            padding: 10px 28px; display: flex; align-items: center; gap: 10px; }
+  .urlbar .pill { font: 11px var(--mono); color: var(--muted2); background: var(--panel);
+                  border: 1px solid var(--border); border-radius: 6px; padding: 4px 12px; }
+  .urlbar .spacer { flex: 1; }
+  .btn {
+    border: 0; border-radius: 7px; padding: 8px 14px; font-size: 13px; font-weight: 600;
+    background: var(--accent); color: #04211d; cursor: pointer;
+    transition: transform .12s ease, box-shadow .2s ease, opacity .15s;
+  }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 18px rgba(45,212,191,.25); }
+  .btn:active { transform: translateY(0); }
+  .btn:disabled { opacity: .45; cursor: default; transform: none; box-shadow: none; }
+  .btn.ghost { background: transparent; color: var(--accent);
+               border: 1px solid rgba(45,212,191,.35); }
+  .btn.ghost:hover { background: var(--accent-dim); box-shadow: none; }
+
+  .wrap { padding: 26px 28px 60px; max-width: 1180px; }
+  h1 { font-size: 21px; font-weight: 700; letter-spacing: -.01em; }
+  .subtitle { color: var(--muted); font-size: 13px; margin-top: 3px; }
+  .fade-up { animation: fadeUp .45s cubic-bezier(.2,.7,.3,1) both; }
+
+  .alertbar {
+    margin-top: 18px; display: flex; align-items: center; gap: 10px;
+    background: linear-gradient(90deg, rgba(45,212,191,.08), rgba(45,212,191,.02));
+    border: 1px solid rgba(45,212,191,.25); border-radius: 9px; padding: 11px 14px;
+    font-size: 13px;
+  }
+  .alertbar.warn { background: linear-gradient(90deg, rgba(251,191,36,.09), transparent);
+                   border-color: rgba(251,191,36,.3); }
+  .alertbar .tri { color: var(--amber); }
+  .alertbar b { font-family: var(--mono); font-weight: 600; }
+  .alertbar .spacer { flex: 1; }
+
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 18px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 11px;
+    padding: 16px 18px; transition: border-color .2s ease, transform .2s ease;
+  }
+  .card:hover { border-color: var(--border2); transform: translateY(-1px); }
+  .card .k { font: 10px var(--mono); letter-spacing: .12em; color: var(--muted);
+             text-transform: uppercase; }
+  .card .v { font-size: 27px; font-weight: 700; margin-top: 7px; font-variant-numeric: tabular-nums;
+             letter-spacing: -.02em; }
+  .card .s { font-size: 11px; color: var(--muted); margin-top: 5px; }
+  .card .v .unit { font-size: 15px; color: var(--muted2); }
+  .up { color: var(--green); } .down { color: var(--red); } .accent { color: var(--accent); }
+  .cards .card:nth-child(1) { animation-delay: .05s } .cards .card:nth-child(2) { animation-delay: .1s }
+  .cards .card:nth-child(3) { animation-delay: .15s } .cards .card:nth-child(4) { animation-delay: .2s }
+
+  .section { margin-top: 30px; }
+  .sechead { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+  .sechead h2 { font-size: 15px; font-weight: 700; }
+  .sechead .count { font: 11px var(--mono); color: var(--muted); }
+
+  .tablewrap { background: var(--panel); border: 1px solid var(--border);
+               border-radius: 11px; overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    font: 10px var(--mono); letter-spacing: .1em; text-transform: uppercase;
+    color: var(--muted); text-align: left; padding: 11px 14px;
+    border-bottom: 1px solid var(--border); background: var(--bg2);
+  }
+  tbody td { padding: 12px 14px; border-bottom: 1px solid var(--border);
+             font-size: 13px; font-variant-numeric: tabular-nums; }
+  tbody tr { cursor: pointer; transition: background .13s ease; }
+  tbody tr:hover { background: var(--panel2); }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody tr.selected { background: var(--accent-dim); box-shadow: inset 2px 0 0 var(--accent); }
+  td.mono, .mono { font-family: var(--mono); font-size: 12px; }
+  .jobname { color: var(--text); font-family: var(--mono); font-size: 12.5px; }
+  .dim { color: var(--muted); }
+
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    font: 600 10px var(--mono); letter-spacing: .08em; border-radius: 5px;
+    padding: 3px 8px; text-transform: uppercase;
+  }
+  .pill::before { content: ""; width: 5px; height: 5px; border-radius: 50%;
+                  background: currentColor; }
+  .pill.debiased { color: var(--green); background: var(--green-dim); }
+  .pill.audited  { color: var(--blue); background: rgba(96,165,250,.1); }
+  .pill.alerting { color: var(--accent); background: var(--accent-dim);
+                   border: 1px solid rgba(45,212,191,.35); }
+  .pill.alerting::before, .pill.running::before { animation: pulse 1.4s ease infinite; }
+  .pill.running  { color: var(--accent); background: var(--accent-dim); }
+  .pill.queued   { color: var(--amber); background: var(--amber-dim); }
+  .pill.failed   { color: var(--red); background: var(--red-dim); }
+
+  .spark { display: block; }
+  .spark polyline {
+    fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
+    stroke-dasharray: 300; stroke-dashoffset: 300; animation: draw 1.2s ease forwards;
+  }
+  .empty { padding: 44px; text-align: center; color: var(--muted); font-size: 13px; }
+
+  /* ---------------- drawer ---------------- */
+  .drawer {
+    position: fixed; top: 0; right: 0; height: 100vh; width: 460px; z-index: 30;
+    background: var(--bg2); border-left: 1px solid var(--border2);
+    transform: translateX(102%); transition: transform .28s cubic-bezier(.3,.8,.3,1);
+    display: flex; flex-direction: column; box-shadow: -30px 0 60px rgba(0,0,0,.45);
+  }
+  .drawer.open { transform: translateX(0); }
+  .drawer header { padding: 18px 22px; border-bottom: 1px solid var(--border);
+                   display: flex; align-items: center; gap: 10px; }
+  .drawer header .x { margin-left: auto; cursor: pointer; color: var(--muted);
+                      font-size: 18px; transition: color .15s; }
+  .drawer header .x:hover { color: var(--text); }
+  .drawer .body { padding: 20px 22px; overflow-y: auto; }
+  .kv { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .kv .cell { background: var(--panel); border: 1px solid var(--border);
+              border-radius: 9px; padding: 12px; }
+  .kv .cell .k { font: 10px var(--mono); color: var(--muted); text-transform: uppercase;
+                 letter-spacing: .1em; }
+  .kv .cell .v { font-size: 19px; font-weight: 700; margin-top: 5px;
+                 font-variant-numeric: tabular-nums; }
+  .kv .cell .s { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .drawer h3 { font-size: 11px; color: var(--muted); text-transform: uppercase;
+               letter-spacing: .1em; margin: 22px 0 10px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 7px; }
+  .chip { font: 11px var(--mono); color: var(--accent); background: var(--accent-dim);
+          border: 1px solid rgba(45,212,191,.25); border-radius: 6px; padding: 3px 9px; }
+  .bars .row { display: grid; grid-template-columns: 130px 1fr 52px; gap: 10px;
+               align-items: center; margin-bottom: 7px; font-size: 12px; }
+  .bars .track { height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; }
+  .bars .fill { height: 100%; background: var(--accent); border-radius: 3px;
+                transition: width .6s cubic-bezier(.2,.7,.3,1); }
+  .drawer .actions { display: flex; gap: 10px; margin-top: 24px; }
+
+  /* ---------------- modal ---------------- */
+  .overlay {
+    position: fixed; inset: 0; z-index: 40; background: rgba(4,6,10,.6);
+    backdrop-filter: blur(4px); display: grid; place-items: center;
+    opacity: 0; pointer-events: none; transition: opacity .2s ease;
+  }
+  .overlay.open { opacity: 1; pointer-events: auto; }
+  .modal {
+    width: 430px; background: var(--bg2); border: 1px solid var(--border2);
+    border-radius: 14px; padding: 24px; transform: translateY(10px) scale(.98);
+    transition: transform .22s cubic-bezier(.2,.8,.3,1.1);
+    box-shadow: 0 30px 80px rgba(0,0,0,.5);
+  }
+  .overlay.open .modal { transform: translateY(0) scale(1); }
+  .modal h2 { font-size: 16px; }
+  .modal .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .check { display: flex; gap: 9px; align-items: center; margin-top: 14px; font-size: 13px; }
+  .check input { width: auto; }
+  .modal .actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+  #formError { color: var(--red); font-size: 12px; margin-top: 10px; min-height: 16px; }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translate(-50%, 20px);
+    background: var(--panel2); border: 1px solid var(--border2); color: var(--text);
+    border-radius: 9px; padding: 10px 18px; font-size: 13px; z-index: 60;
+    opacity: 0; transition: all .25s ease; pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; } }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes pulse { 0%, 100% { opacity: 1 } 50% { opacity: .25 } }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
 </style>
 </head>
 <body>
-<header>
-  <h1>SCALPEL</h1>
-  <span>surgical model editing &amp; bias mitigation console</span>
-</header>
-<main>
-  <section>
-    <div class="panel">
-      <h2>New job</h2>
-      <label>API key</label>
-      <input id="apiKey" type="password" placeholder="sk_...">
-      <label>Mode</label>
-      <select id="mode">
-        <option value="edit">Edit — remove the bias (paid plans)</option>
-        <option value="audit">Audit — measure &amp; locate only (free)</option>
-      </select>
-      <label>Model</label>
-      <select id="model"></select>
-      <label>Bias benchmark</label>
-      <select id="bias"></select>
-      <label>Max circuit components</label>
-      <input id="maxComponents" type="number" value="12" min="1" max="128">
-      <label>Bias subspace dimensions</label>
-      <input id="numDirections" type="number" value="1" min="1" max="16">
-      <button id="run">Run</button>
-      <div id="error"></div>
-    </div>
-    <div class="panel" id="usagePanel" style="margin-top: 24px" hidden>
-      <h2>Plan &amp; usage</h2>
-      <div id="usageBody" class="sub"></div>
-    </div>
-  </section>
 
-  <section>
-    <div class="panel">
-      <h2>Edit jobs</h2>
-      <table>
-        <thead><tr><th>Job</th><th>Model</th><th>Bias</th><th>Status</th><th>Updated</th></tr></thead>
-        <tbody id="jobs"><tr><td colspan="5" class="empty">Enter your API key to load jobs</td></tr></tbody>
-      </table>
+<aside>
+  <div class="brand"><span class="dot"></span><b>SCALPEL</b><span class="ver">v0.2</span></div>
+  <div class="tenantbox">
+    <span class="name" id="tenantName">—</span>
+    <span class="plan-pill" id="tenantPlan">offline</span>
+  </div>
+  <div class="searchwrap"><input id="search" placeholder="Filter jobs…"></div>
+
+  <div class="navsec">Monitor</div>
+  <div class="nav">
+    <a class="active">▦ &nbsp;Overview</a>
+    <a id="navAlerts">⚠ &nbsp;Alerts <span class="badge" id="alertCount" hidden>0</span></a>
+  </div>
+
+  <div class="navsec">Benchmarks</div>
+  <div class="nav benchlist" id="benchNav"></div>
+
+  <div class="navsec">Platform</div>
+  <div class="nav">
+    <a href="/docs" target="_blank">⌁ &nbsp;API Docs</a>
+    <a onclick="openModal()">✚ &nbsp;New surgery</a>
+  </div>
+
+  <div class="sidebar-bottom">
+    <div class="connection">
+      <label style="margin-top: 0">API key</label>
+      <input id="apiKey" type="password" placeholder="sk_…">
+      <div class="conn-status"><span class="cdot" id="connDot"></span><span id="connText">not connected</span></div>
     </div>
-    <div class="panel" id="detail" hidden>
-      <h2>Audit report — <span id="detailId"></span></h2>
-      <div class="metrics" id="detailMetrics"></div>
-      <div id="detailLinks" style="margin-top: 14px"></div>
+    <div class="userbox">
+      <div class="avatar" id="avatar">–</div>
+      <div><div class="un" id="userName">Not signed in</div>
+           <div class="ue" id="userPlanLine">enter an API key</div></div>
     </div>
-  </section>
+  </div>
+</aside>
+
+<main>
+  <div class="urlbar">
+    <span class="pill">scalpel.app/overview</span>
+    <span class="spacer"></span>
+    <button class="btn" onclick="openModal()">✚ &nbsp;New surgery</button>
+  </div>
+
+  <div class="wrap">
+    <div class="fade-up">
+      <h1>Bias Operations Overview</h1>
+      <div class="subtitle" id="subtitle">connect with your API key to load your workspace</div>
+    </div>
+
+    <div class="alertbar warn fade-up" id="alertbar" hidden>
+      <span class="tri">▲</span><span id="alertText"></span>
+      <span class="spacer"></span>
+      <button class="btn ghost" onclick="openModal()">Remediate →</button>
+    </div>
+
+    <div class="cards">
+      <div class="card fade-up"><div class="k">Surgeries Run</div>
+        <div class="v" id="statJobs">0</div><div class="s" id="statJobsSub">across all benchmarks</div></div>
+      <div class="card fade-up"><div class="k">Avg Bias Reduction</div>
+        <div class="v accent" id="statReduction">—</div><div class="s">association gap, completed edits</div></div>
+      <div class="card fade-up"><div class="k">Avg Retention</div>
+        <div class="v up" id="statRetention">—</div><div class="s">embedding cosine, neutral prompts</div></div>
+      <div class="card fade-up"><div class="k">Circuits Severed</div>
+        <div class="v" id="statEdits">0</div><div class="s">closed-form projection edits</div></div>
+    </div>
+
+    <div class="section fade-up" style="animation-delay: .25s">
+      <div class="sechead"><h2>Job Health</h2><span class="count" id="jobCount"></span></div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr>
+            <th>Job</th><th>Benchmark</th><th>Status</th><th>WEAT</th>
+            <th>Gap Δ</th><th>Retention</th><th>Trend</th><th>Updated</th>
+          </tr></thead>
+          <tbody id="jobs"><tr><td colspan="8" class="empty">No jobs yet — run your first surgery</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 </main>
+
+<div class="drawer" id="drawer">
+  <header>
+    <span class="pill debiased" id="dPill">—</span>
+    <span class="mono" id="dId"></span>
+    <span class="x" onclick="closeDrawer()">✕</span>
+  </header>
+  <div class="body">
+    <div class="kv" id="dCards"></div>
+    <h3>Severed circuit components</h3>
+    <div class="chips" id="dChips"></div>
+    <h3>Per-probe association gaps</h3>
+    <div class="bars" id="dBars"></div>
+    <div class="actions" id="dActions"></div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay" onclick="if (event.target === this) closeModal()">
+  <div class="modal">
+    <h2>New surgery</h2>
+    <div class="hint">Closed-form bias removal. Audit mode measures and locates without editing.</div>
+    <label>Model</label><select id="fModel"></select>
+    <label>Bias benchmark</label><select id="fBias"></select>
+    <div class="row2">
+      <div><label>Mode</label>
+        <select id="fMode"><option value="edit">Edit — remove bias</option>
+        <option value="audit">Audit — measure only</option></select></div>
+      <div><label>Subspace dims (k)</label>
+        <input id="fK" type="number" value="4" min="1" max="16"></div>
+    </div>
+    <div class="check"><input type="checkbox" id="fCalibrate" checked>
+      <span>Calibrate erasure strength (targets neutrality, avoids overcorrection)</span></div>
+    <div id="formError"></div>
+    <div class="actions">
+      <button class="btn ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn" id="fSubmit" onclick="submitJob()">Run surgery</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
 
 <script>
 const $ = (id) => document.getElementById(id);
+const DEMO = location.protocol === "file:" || new URLSearchParams(location.search).has("demo");
+const reportCache = new Map();
+let selectedJob = null, jobsData = [];
+
+/* ---------------- api ---------------- */
 const headers = () => ({ "X-API-Key": $("apiKey").value, "Content-Type": "application/json" });
-let selectedJob = null;
-
-$("apiKey").value = localStorage.getItem("scalpel_key") || "";
-$("apiKey").addEventListener("change", () => {
-  localStorage.setItem("scalpel_key", $("apiKey").value);
-  loadCatalogs(); refresh(); loadUsage();
-});
-
 async function api(path, options = {}) {
   const response = await fetch(path, { headers: headers(), ...options });
   if (!response.ok) throw new Error((await response.json()).detail || response.statusText);
   return response.json();
 }
 
-async function loadCatalogs() {
-  if (!$("apiKey").value) return;
-  try {
-    const [models, biases] = await Promise.all([api("/v1/models"), api("/v1/biases")]);
-    $("model").innerHTML = models.map(m => `<option>${m.model_id}</option>`).join("");
-    $("bias").innerHTML = biases.map(b => `<option>${b.name}</option>`).join("");
-    $("error").textContent = "";
-  } catch (err) { $("error").textContent = err.message; }
+/* ---------------- demo data (preview without a backend) ---------------- */
+const DEMO_JOBS = [
+  { id: "job_9f2ce81a44d0b7e3aa10", bias_name: "gender_profession", mode: "edit",
+    status: "succeeded", updated_at: new Date(Date.now() - 42e4).toISOString() },
+  { id: "job_5b7d10c2e94f8a6d3c55", bias_name: "ethnicity_valence", mode: "edit",
+    status: "succeeded", updated_at: new Date(Date.now() - 36e5).toISOString() },
+  { id: "job_e1a4c99d02b6f5783d21", bias_name: "age_competence", mode: "audit",
+    status: "succeeded", updated_at: new Date(Date.now() - 72e5).toISOString() },
+  { id: "job_77b3e5f8d1a09c24be66", bias_name: "gender_profession", mode: "edit",
+    status: "running", updated_at: new Date(Date.now() - 3e4).toISOString() },
+];
+function demoReport(job) {
+  const gaps = {}, gapsAfter = {};
+  const probes = ["engineer", "surgeon", "ceo", "pilot", "developer", "physicist",
+                  "nurse", "librarian", "teacher", "secretary", "social worker", "stylist"];
+  probes.forEach((p, i) => {
+    gaps["a photo of a " + p] = (i < 6 ? 1 : -1) * (0.012 + 0.014 * Math.abs(Math.sin(i * 2.7)));
+    gapsAfter["a photo of a " + p] = gaps["a photo of a " + p] * 0.16;
+  });
+  const audit = job.mode === "audit";
+  const base = {
+    mode: job.mode, model_id: "openai/clip-vit-base-patch32", runtime_seconds: 9.4,
+    circuit: { direction_layer: 9, num_directions: 4, direction_separation: 9.52,
+      selected_components: ["L10.H3","L8.H2","L7.H6","L10.MLP","L3.H7","L9.MLP","L8.H4","L11.MLP"]
+        .map(l => ({ label: l })) },
+    metrics: { bias_before: { weat_effect_size: 1.71, mean_abs_association_gap: 0.0157,
+                              per_probe_gaps: gaps } },
+  };
+  if (!audit) {
+    base.surgery = { num_edits: 20, strength: job.bias_name === "ethnicity_valence" ? 0.55 : 1.0 };
+    base.metrics.bias_after = { weat_effect_size: 0.34, mean_abs_association_gap: 0.0029,
+                                per_probe_gaps: gapsAfter };
+    base.metrics.bias_reduction = {
+      weat_effect_size: { before: 1.71, after: 0.34, reduction_pct: 79.1 },
+      mean_abs_association_gap: { before: 0.0157, after: 0.0029, reduction_pct: 81.6 } };
+    base.metrics.retention = { embedding_cosine_retention: 0.9965, geometry_retention: 0.9971 };
+  }
+  return base;
 }
 
-$("run").addEventListener("click", async () => {
-  $("run").disabled = true; $("error").textContent = "";
+/* ---------------- data loading ---------------- */
+async function loadCatalogs() {
   try {
-    const job = await api("/v1/edit-jobs", { method: "POST", body: JSON.stringify({
-      model_id: $("model").value,
-      bias: $("bias").value,
-      mode: $("mode").value,
-      options: {
-        max_components: parseInt($("maxComponents").value) || 12,
-        num_directions: parseInt($("numDirections").value) || 1,
-      },
-    })});
-    selectedJob = job.id;
-    await refresh(); await loadUsage();
-  } catch (err) { $("error").textContent = err.message; }
-  $("run").disabled = false;
-});
+    const [models, biases] = DEMO
+      ? [[{ model_id: "openai/clip-vit-base-patch32" }],
+         [{ name: "gender_profession" }, { name: "age_competence" }, { name: "ethnicity_valence" }]]
+      : await Promise.all([api("/v1/models"), api("/v1/biases")]);
+    $("fModel").innerHTML = models.map(m => `<option>${m.model_id}</option>`).join("");
+    $("fBias").innerHTML = biases.map(b => `<option>${b.name}</option>`).join("");
+    const colors = ["var(--accent)", "var(--purple)", "var(--blue)", "var(--amber)"];
+    $("benchNav").innerHTML = biases.map((b, i) =>
+      `<a onclick="$('search').value='${b.name}'; renderJobs()">
+         <span class="bdot" style="background:${colors[i % 4]}"></span>${b.name}</a>`).join("");
+  } catch (err) { /* not connected yet */ }
+}
 
 async function loadUsage() {
-  if (!$("apiKey").value) return;
   try {
-    const u = await api("/v1/usage");
-    const limit = u.monthly_job_limit === null ? "unlimited" : u.monthly_job_limit;
-    $("usageBody").innerHTML =
-      `Tenant <b>${u.tenant}</b> · plan <b>${u.plan}</b> · ` +
-      `${u.jobs_this_month} / ${limit} jobs this month · ` +
-      (u.allows_edit ? "edits enabled" : "audit-only (upgrade to edit)");
-    $("usagePanel").hidden = false;
-  } catch (err) { /* ignore */ }
+    const u = DEMO
+      ? { tenant: "finova-ai", plan: "pro", jobs_this_month: 14, monthly_job_limit: 100 }
+      : await api("/v1/usage");
+    $("tenantName").textContent = u.tenant;
+    $("tenantPlan").textContent = u.plan;
+    $("connDot").classList.add("on");
+    $("connText").textContent = "connected";
+    $("avatar").textContent = u.tenant.slice(0, 2).toUpperCase();
+    $("userName").textContent = u.tenant;
+    const limit = u.monthly_job_limit === null ? "∞" : u.monthly_job_limit;
+    $("userPlanLine").textContent = `${u.plan} · ${u.jobs_this_month}/${limit} jobs`;
+  } catch (err) {
+    $("connDot").classList.remove("on");
+    $("connText").textContent = "invalid key";
+  }
+}
+
+async function getReport(job) {
+  if (reportCache.has(job.id)) return reportCache.get(job.id);
+  try {
+    const report = DEMO ? demoReport(job) : await api(`/v1/edit-jobs/${job.id}/report`);
+    reportCache.set(job.id, report);
+    return report;
+  } catch (err) { return null; }
+}
+
+async function refresh() {
+  if (!DEMO && !$("apiKey").value) return;
+  try {
+    jobsData = DEMO ? DEMO_JOBS : await api("/v1/edit-jobs");
+    await Promise.all(jobsData.filter(j => j.status === "succeeded").map(getReport));
+    renderStats(); renderJobs(); renderAlerts();
+    $("subtitle").textContent =
+      `${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}` +
+      ` · ${jobsData.length} jobs · ${new Set(jobsData.map(j => j.bias_name)).size} benchmarks`;
+  } catch (err) { /* offline */ }
+}
+
+/* ---------------- rendering ---------------- */
+function animateNumber(el, target, format) {
+  const start = performance.now(), dur = 700;
+  const from = parseFloat(el.dataset.v || 0) || 0;
+  el.dataset.v = target;
+  function tick(t) {
+    const p = Math.min(1, (t - start) / dur), e = 1 - Math.pow(1 - p, 3);
+    el.innerHTML = format(from + (target - from) * e);
+    if (p < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+function renderStats() {
+  const done = jobsData.filter(j => j.status === "succeeded");
+  const edits = done.map(j => reportCache.get(j.id)).filter(r => r && r.metrics.bias_reduction);
+  animateNumber($("statJobs"), jobsData.length, v => Math.round(v));
+  $("statJobsSub").textContent = `${done.length} completed · ${jobsData.length - done.length} active`;
+  if (edits.length) {
+    const avgRed = edits.reduce((s, r) => s + r.metrics.bias_reduction.mean_abs_association_gap.reduction_pct, 0) / edits.length;
+    const avgRet = edits.reduce((s, r) => s + r.metrics.retention.embedding_cosine_retention, 0) / edits.length;
+    const totalEdits = edits.reduce((s, r) => s + r.surgery.num_edits, 0);
+    animateNumber($("statReduction"), avgRed, v => `−${v.toFixed(1)}<span class="unit">%</span>`);
+    animateNumber($("statRetention"), avgRet * 100, v => `${v.toFixed(2)}<span class="unit">%</span>`);
+    animateNumber($("statEdits"), totalEdits, v => Math.round(v));
+  }
+}
+
+function sparkline(values, color) {
+  if (!values || values.length < 2) return "";
+  const w = 96, h = 26, min = Math.min(...values), max = Math.max(...values);
+  const pts = values.map((v, i) =>
+    `${(i / (values.length - 1)) * w},${h - 3 - ((v - min) / (max - min || 1)) * (h - 6)}`).join(" ");
+  return `<svg class="spark" width="${w}" height="${h}"><polyline points="${pts}" stroke="${color}"/></svg>`;
+}
+
+function statusPill(job, report) {
+  if (job.status === "running") return `<span class="pill running">running</span>`;
+  if (job.status === "queued") return `<span class="pill queued">queued</span>`;
+  if (job.status === "failed") return `<span class="pill failed">failed</span>`;
+  if (job.mode === "audit") {
+    const weat = report ? Math.abs(report.metrics.bias_before.weat_effect_size) : 0;
+    return weat >= 0.5
+      ? `<span class="pill alerting">bias found</span>`
+      : `<span class="pill audited">audited</span>`;
+  }
+  return `<span class="pill debiased">debiased</span>`;
+}
+
+function renderJobs() {
+  const filter = $("search").value.toLowerCase();
+  const rows = jobsData
+    .filter(j => (j.id + j.bias_name + j.mode + j.status).toLowerCase().includes(filter))
+    .map(job => {
+      const r = reportCache.get(job.id);
+      let weat = "—", gap = "—", ret = "—", trend = "";
+      if (r) {
+        const m = r.metrics;
+        if (m.bias_reduction) {
+          weat = `<span class="dim">${m.bias_reduction.weat_effect_size.before}</span> → ${m.bias_reduction.weat_effect_size.after}`;
+          gap = `<span class="up">−${m.bias_reduction.mean_abs_association_gap.reduction_pct}%</span>`;
+          ret = (m.retention.embedding_cosine_retention * 100).toFixed(2) + "%";
+          trend = sparkline(Object.values(m.bias_after.per_probe_gaps), "var(--accent)");
+        } else {
+          weat = `${m.bias_before.weat_effect_size}`;
+          gap = `<span class="dim">audit</span>`;
+          trend = sparkline(Object.values(m.bias_before.per_probe_gaps), "var(--purple)");
+        }
+      }
+      const t = new Date(job.updated_at + (job.updated_at.endsWith("Z") || job.updated_at.includes("+") ? "" : "Z"));
+      return `<tr class="${selectedJob === job.id ? "selected" : ""}" onclick="showDetail('${job.id}')">
+        <td class="jobname">${job.id.slice(0, 16)}…</td>
+        <td class="mono dim">${job.bias_name}</td>
+        <td>${statusPill(job, r)}</td>
+        <td class="mono">${weat}</td>
+        <td class="mono">${gap}</td>
+        <td class="mono">${ret}</td>
+        <td>${trend}</td>
+        <td class="dim mono">${t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</td>
+      </tr>`;
+    });
+  $("jobs").innerHTML = rows.length ? rows.join("")
+    : `<tr><td colspan="8" class="empty">No jobs match — run your first surgery</td></tr>`;
+  $("jobCount").textContent = `${rows.length} jobs`;
+}
+
+function renderAlerts() {
+  const failed = jobsData.filter(j => j.status === "failed").length;
+  const hot = jobsData.filter(j => {
+    const r = reportCache.get(j.id);
+    return j.mode === "audit" && r && Math.abs(r.metrics.bias_before.weat_effect_size) >= 0.5;
+  });
+  const count = failed + hot.length;
+  $("alertCount").hidden = count === 0;
+  $("alertCount").textContent = count;
+  if (hot.length) {
+    $("alertbar").hidden = false;
+    const worst = hot[0], r = reportCache.get(worst.id);
+    $("alertText").innerHTML = `${count} active alert${count > 1 ? "s" : ""} — ` +
+      `<b>${worst.bias_name}</b> audit found WEAT ${r.metrics.bias_before.weat_effect_size} (unremediated)`;
+  } else if (failed) {
+    $("alertbar").hidden = false;
+    $("alertText").innerHTML = `${failed} job${failed > 1 ? "s" : ""} failed — check job detail`;
+  } else { $("alertbar").hidden = true; }
+}
+
+/* ---------------- drawer ---------------- */
+async function showDetail(id) {
+  selectedJob = id;
+  renderJobs();
+  const job = jobsData.find(j => j.id === id);
+  const r = await getReport(job);
+  if (!r) return;
+  const m = r.metrics, edit = !!m.bias_reduction;
+  $("dPill").outerHTML = statusPill(job, r).replace("<span", '<span id="dPill"');
+  $("dId").textContent = id;
+  const cells = [];
+  if (edit) {
+    cells.push([`−${m.bias_reduction.mean_abs_association_gap.reduction_pct}%`, "association gap",
+      `${m.bias_reduction.mean_abs_association_gap.before} → ${m.bias_reduction.mean_abs_association_gap.after}`, "accent"]);
+    cells.push([`${m.bias_reduction.weat_effect_size.reduction_pct}%`, "WEAT reduction",
+      `${m.bias_reduction.weat_effect_size.before} → ${m.bias_reduction.weat_effect_size.after}`, "accent"]);
+    cells.push([(m.retention.embedding_cosine_retention * 100).toFixed(2) + "%", "retention",
+      "embedding cosine, neutral prompts", "up"]);
+    cells.push([r.surgery.num_edits, "projection edits",
+      `strength ${r.surgery.strength ?? 1.0} · k=${r.circuit.num_directions ?? 1}`, ""]);
+  } else {
+    cells.push([m.bias_before.weat_effect_size, "WEAT effect size", "measured, no edits", "accent"]);
+    cells.push([m.bias_before.mean_abs_association_gap, "association gap", "mean absolute", ""]);
+    cells.push([r.circuit.selected_components.length, "circuit components", "carrying the bias", ""]);
+    cells.push([`${r.runtime_seconds}s`, "audit runtime", "gradient-free", ""]);
+  }
+  $("dCards").innerHTML = cells.map(([v, k, s, cls]) =>
+    `<div class="cell"><div class="k">${k}</div><div class="v ${cls}">${v}</div><div class="s">${s}</div></div>`).join("");
+  $("dChips").innerHTML = r.circuit.selected_components.map(c => `<span class="chip">${c.label}</span>`).join("");
+  const gaps = Object.entries((edit ? m.bias_after : m.bias_before).per_probe_gaps).slice(0, 10);
+  const maxGap = Math.max(...gaps.map(([, v]) => Math.abs(v)), 1e-6);
+  $("dBars").innerHTML = gaps.map(([probe, v]) =>
+    `<div class="row"><span class="dim mono">${probe.replace("a photo of ", "")}</span>
+      <div class="track"><div class="fill" style="width:${(Math.abs(v) / maxGap) * 100}%"></div></div>
+      <span class="mono">${v.toFixed(4)}</span></div>`).join("");
+  const actions = [`<button class="btn ghost" onclick="download('/v1/edit-jobs/${id}/report.html', '${id}-report.html')">Compliance report</button>`];
+  if (edit) actions.push(`<button class="btn" onclick="download('/v1/edit-jobs/${id}/artifact', '${id}-model.zip')">Download weights</button>`);
+  $("dActions").innerHTML = actions.join("");
+  $("drawer").classList.add("open");
+}
+function closeDrawer() { $("drawer").classList.remove("open"); selectedJob = null; renderJobs(); }
+
+/* ---------------- modal & actions ---------------- */
+function openModal() { $("overlay").classList.add("open"); }
+function closeModal() { $("overlay").classList.remove("open"); $("formError").textContent = ""; }
+function toast(msg) {
+  $("toast").textContent = msg; $("toast").classList.add("show");
+  setTimeout(() => $("toast").classList.remove("show"), 2600);
+}
+
+async function submitJob() {
+  if (DEMO) { closeModal(); toast("Demo mode — connect an API key to run real surgeries"); return; }
+  $("fSubmit").disabled = true; $("formError").textContent = "";
+  try {
+    const job = await api("/v1/edit-jobs", { method: "POST", body: JSON.stringify({
+      model_id: $("fModel").value, bias: $("fBias").value, mode: $("fMode").value,
+      options: { num_directions: parseInt($("fK").value) || 1, calibrate: $("fCalibrate").checked },
+    })});
+    closeModal(); toast(`Job ${job.id.slice(0, 16)}… queued`);
+    selectedJob = job.id; await refresh(); loadUsage();
+  } catch (err) { $("formError").textContent = err.message; }
+  $("fSubmit").disabled = false;
 }
 
 async function download(path, filename) {
   const response = await fetch(path, { headers: headers() });
-  if (!response.ok) { $("error").textContent = "download failed"; return; }
+  if (!response.ok) { toast("Download failed"); return; }
   const blob = await response.blob();
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = filename;
-  a.click();
+  a.href = URL.createObjectURL(blob); a.download = filename; a.click();
   URL.revokeObjectURL(a.href);
 }
 
-function pct(reduction) {
-  const value = reduction.reduction_pct;
-  const cls = value >= 0 ? "good" : "bad";
-  return `<span class="${cls}">${value >= 0 ? "−" : "+"}${Math.abs(value).toFixed(1)}%</span>`;
-}
+/* ---------------- boot ---------------- */
+$("apiKey").value = localStorage.getItem("scalpel_key") || "";
+$("apiKey").addEventListener("change", () => {
+  localStorage.setItem("scalpel_key", $("apiKey").value);
+  reportCache.clear(); loadCatalogs(); loadUsage(); refresh();
+});
+$("search").addEventListener("input", renderJobs);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeDrawer(); closeModal(); } });
 
-async function showDetail(id) {
-  selectedJob = id;
-  try {
-    const report = await api(`/v1/edit-jobs/${id}/report`);
-    const m = report.metrics;
-    $("detailId").textContent = id;
-    let cards;
-    if (m.bias_reduction) {
-      cards = `
-      <div class="metric"><div class="value">${pct(m.bias_reduction.mean_abs_association_gap)}</div>
-        <div class="label">association gap (${m.bias_reduction.mean_abs_association_gap.before} → ${m.bias_reduction.mean_abs_association_gap.after})</div></div>
-      <div class="metric"><div class="value">${pct(m.bias_reduction.weat_effect_size)}</div>
-        <div class="label">WEAT effect size (${m.bias_reduction.weat_effect_size.before} → ${m.bias_reduction.weat_effect_size.after})</div></div>
-      <div class="metric"><div class="value good">${(m.retention.embedding_cosine_retention * 100).toFixed(2)}%</div>
-        <div class="label">embedding retention</div></div>
-      <div class="metric"><div class="value">${report.surgery.num_edits}</div>
-        <div class="label">projection edits applied</div></div>`;
-    } else {
-      cards = `
-      <div class="metric"><div class="value">${m.bias_before.weat_effect_size}</div>
-        <div class="label">WEAT effect size (measured, no edits)</div></div>
-      <div class="metric"><div class="value">${m.bias_before.mean_abs_association_gap}</div>
-        <div class="label">mean absolute association gap</div></div>`;
-    }
-    cards += `
-      <div class="metric"><div class="value">${report.circuit.selected_components.map(c => c.label).join(", ")}</div>
-        <div class="label">bias circuit components</div></div>
-      <div class="metric"><div class="value">${report.runtime_seconds}s</div>
-        <div class="label">runtime</div></div>`;
-    $("detailMetrics").innerHTML = cards;
-    const links = [
-      `<a href="#" onclick="download('/v1/edit-jobs/${id}/report.html', '${id}-report.html'); return false"
-          style="color: var(--accent)">Download compliance report (HTML)</a>`,
-    ];
-    if (m.bias_reduction) {
-      links.push(
-        `<a href="#" onclick="download('/v1/edit-jobs/${id}/artifact', '${id}-model.zip'); return false"
-            style="color: var(--accent)">Download edited weights (zip)</a>`);
-    }
-    $("detailLinks").innerHTML = links.join(" &nbsp;·&nbsp; ");
-    $("detail").hidden = false;
-  } catch (err) { /* report not ready yet */ }
-}
-
-async function refresh() {
-  if (!$("apiKey").value) return;
-  try {
-    const jobs = await api("/v1/edit-jobs");
-    $("jobs").innerHTML = jobs.length ? jobs.map(job => `
-      <tr class="job" onclick="showDetail('${job.id}')">
-        <td>${job.id.slice(0, 12)}…</td><td>${job.model_id} <span style="color: var(--muted)">(${job.mode})</span></td><td>${job.bias_name}</td>
-        <td><span class="status ${job.status}">${job.status}</span></td>
-        <td>${new Date(job.updated_at).toLocaleTimeString()}</td>
-      </tr>`).join("")
-      : `<tr><td colspan="5" class="empty">No jobs yet — run your first surgery</td></tr>`;
-    if (selectedJob) showDetail(selectedJob);
-  } catch (err) { /* bad key; error surfaced elsewhere */ }
-}
-
-loadCatalogs();
-refresh();
-loadUsage();
-setInterval(refresh, 2500);
+loadCatalogs(); loadUsage(); refresh();
+setInterval(refresh, 3000);
 </script>
 </body>
 </html>
