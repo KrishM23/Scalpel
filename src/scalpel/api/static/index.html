@@ -6,14 +6,13 @@
 <title>Scalpel — Bias Operations</title>
 <style>
   :root {
-    --bg: #0a0d12; --bg2: #0d1117; --panel: #10151d; --panel2: #131a24;
-    --border: #1b2330; --border2: #242f40;
-    --text: #dfe6f0; --muted: #6b7689; --muted2: #8b96aa;
-    --accent: #2dd4bf; --accent-dim: rgba(45, 212, 191, 0.12);
-    --green: #4ade80; --green-dim: rgba(74, 222, 128, 0.1);
-    --amber: #fbbf24; --amber-dim: rgba(251, 191, 36, 0.1);
-    --red: #f87171; --red-dim: rgba(248, 113, 113, 0.1);
-    --purple: #a78bfa; --blue: #60a5fa;
+    --bg: #000000; --bg2: #0a0a0a; --panel: #111111; --panel2: #171717;
+    --border: #222222; --border2: #2e2e2e;
+    --text: #f5f5f5; --muted: #737373; --muted2: #a3a3a3;
+    --accent: #ffffff; --accent-dim: rgba(255, 255, 255, 0.08);
+    --good: #ffffff; --good-dim: rgba(255, 255, 255, 0.08);
+    --warn: #d4d4d4; --warn-dim: rgba(255, 255, 255, 0.06);
+    --bad: #a3a3a3; --bad-dim: rgba(255, 255, 255, 0.06);
     --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
   }
   * { box-sizing: border-box; margin: 0; }
@@ -44,8 +43,7 @@
     animation: fadeIn .4s ease both; overflow-y: auto;
   }
   .brand { display: flex; align-items: center; gap: 8px; padding: 4px 8px 14px; }
-  .brand .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
-                box-shadow: 0 0 10px var(--accent); }
+  .brand .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
   .brand b { font-size: 15px; letter-spacing: .12em; }
   .brand .ver { margin-left: auto; font: 10px var(--mono); color: var(--muted);
                 border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; }
@@ -55,12 +53,12 @@
     margin-bottom: 10px; background: var(--panel);
   }
   .tenantbox .name { font-size: 13px; font-weight: 600; }
-  .plan-pill { font: 10px var(--mono); text-transform: uppercase; color: var(--accent);
-               border: 1px solid rgba(45,212,191,.35); border-radius: 4px; padding: 1px 6px; }
+  .plan-pill { font: 10px var(--mono); text-transform: uppercase; color: var(--text);
+               border: 1px solid var(--border2); border-radius: 4px; padding: 1px 6px; }
   .searchwrap { position: relative; margin-bottom: 12px; }
   .searchwrap input { padding-left: 28px; font-family: var(--mono); font-size: 12px; }
-  .searchwrap::before { content: "⌕"; position: absolute; left: 10px; top: 6px;
-                        color: var(--muted); font-size: 14px; }
+  .searchwrap::before { content: "/"; position: absolute; left: 11px; top: 6px;
+                        color: var(--muted); font: 12px var(--mono); }
   .navsec { font-size: 10px; letter-spacing: .12em; color: var(--muted);
             padding: 12px 8px 5px; text-transform: uppercase; }
   .nav a {
@@ -70,7 +68,7 @@
   }
   .nav a:hover { background: var(--panel2); color: var(--text); }
   .nav a.active { background: var(--accent-dim); color: var(--accent); }
-  .nav .badge { margin-left: auto; background: var(--red); color: #16090b;
+  .nav .badge { margin-left: auto; background: var(--text); color: #000;
                 font: 700 10px var(--mono); border-radius: 8px; padding: 1px 6px; }
   .benchlist a { font-family: var(--mono); font-size: 12px; }
   .benchlist .bdot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
@@ -78,8 +76,8 @@
   .connection { border-top: 1px solid var(--border); padding-top: 12px; }
   .conn-status { display: flex; align-items: center; gap: 7px; font: 11px var(--mono);
                  color: var(--muted); padding: 8px 2px 0; }
-  .conn-status .cdot { width: 7px; height: 7px; border-radius: 50%; background: var(--red); }
-  .conn-status .cdot.on { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .conn-status .cdot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+  .conn-status .cdot.on { background: var(--text); }
   .userbox { display: flex; align-items: center; gap: 9px; padding: 12px 6px 2px; }
   .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--panel2);
             border: 1px solid var(--border2); display: grid; place-items: center;
@@ -89,7 +87,7 @@
 
   /* ---------------- main / views ---------------- */
   main { overflow-y: auto; height: 100vh; scroll-behavior: smooth; }
-  .urlbar { position: sticky; top: 0; z-index: 5; background: rgba(10,13,18,.85);
+  .urlbar { position: sticky; top: 0; z-index: 5; background: rgba(0,0,0,.88);
             backdrop-filter: blur(8px); border-bottom: 1px solid var(--border);
             padding: 10px 28px; display: flex; align-items: center; gap: 10px; }
   .urlbar .pill { font: 11px var(--mono); color: var(--muted2); background: var(--panel);
@@ -98,15 +96,15 @@
   .urlbar .spacer { flex: 1; }
   .btn {
     border: 0; border-radius: 7px; padding: 8px 14px; font-size: 13px; font-weight: 600;
-    background: var(--accent); color: #04211d; cursor: pointer;
-    transition: transform .12s ease, box-shadow .2s ease, opacity .15s;
+    background: var(--text); color: #000; cursor: pointer;
+    transition: transform .12s ease, opacity .15s, background .15s;
   }
-  .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 18px rgba(45,212,191,.25); }
+  .btn:hover { transform: translateY(-1px); background: #e5e5e5; }
   .btn:active { transform: translateY(0); }
-  .btn:disabled { opacity: .45; cursor: default; transform: none; box-shadow: none; }
-  .btn.ghost { background: transparent; color: var(--accent);
-               border: 1px solid rgba(45,212,191,.35); }
-  .btn.ghost:hover { background: var(--accent-dim); box-shadow: none; }
+  .btn:disabled { opacity: .45; cursor: default; transform: none; }
+  .btn.ghost { background: transparent; color: var(--text);
+               border: 1px solid var(--border2); }
+  .btn.ghost:hover { background: var(--accent-dim); }
   .btn.big { padding: 12px 22px; font-size: 14px; border-radius: 9px; }
 
   .view { display: none; }
@@ -121,11 +119,10 @@
 
   .alertbar {
     margin-top: 18px; display: flex; align-items: center; gap: 10px;
-    background: linear-gradient(90deg, rgba(251,191,36,.09), transparent);
-    border: 1px solid rgba(251,191,36,.3); border-radius: 9px; padding: 11px 14px;
-    font-size: 13px;
+    background: var(--panel); border: 1px solid var(--border2);
+    border-radius: 9px; padding: 11px 14px; font-size: 13px;
   }
-  .alertbar .tri { color: var(--amber); }
+  .alertbar .tri { color: var(--muted2); }
   .alertbar b { font-family: var(--mono); font-weight: 600; }
   .alertbar .spacer { flex: 1; }
 
@@ -141,7 +138,7 @@
              letter-spacing: -.02em; }
   .card .s { font-size: 11px; color: var(--muted); margin-top: 5px; }
   .card .v .unit { font-size: 15px; color: var(--muted2); }
-  .up { color: var(--green); } .down { color: var(--red); } .accent { color: var(--accent); }
+  .up { color: var(--text); } .down { color: var(--muted2); } .accent { color: var(--text); }
   .cards .card:nth-child(1) { animation-delay: .05s } .cards .card:nth-child(2) { animation-delay: .1s }
   .cards .card:nth-child(3) { animation-delay: .15s } .cards .card:nth-child(4) { animation-delay: .2s }
 
@@ -175,14 +172,14 @@
   }
   .pill::before { content: ""; width: 5px; height: 5px; border-radius: 50%;
                   background: currentColor; }
-  .pill.debiased { color: var(--green); background: var(--green-dim); }
-  .pill.audited  { color: var(--blue); background: rgba(96,165,250,.1); }
-  .pill.alerting { color: var(--accent); background: var(--accent-dim);
-                   border: 1px solid rgba(45,212,191,.35); }
+  .pill.debiased { color: var(--text); background: var(--good-dim); border: 1px solid var(--border2); }
+  .pill.audited  { color: var(--muted2); background: var(--accent-dim); border: 1px solid var(--border); }
+  .pill.alerting { color: var(--text); background: var(--accent-dim);
+                   border: 1px solid var(--border2); }
   .pill.alerting::before, .pill.running::before { animation: pulse 1.4s ease infinite; }
-  .pill.running  { color: var(--accent); background: var(--accent-dim); }
-  .pill.queued   { color: var(--amber); background: var(--amber-dim); }
-  .pill.failed   { color: var(--red); background: var(--red-dim); }
+  .pill.running  { color: var(--text); background: var(--accent-dim); border: 1px solid var(--border2); }
+  .pill.queued   { color: var(--muted2); background: var(--warn-dim); border: 1px solid var(--border); }
+  .pill.failed   { color: var(--muted2); background: var(--bad-dim); border: 1px solid var(--border); }
 
   .spark { display: block; }
   .spark polyline {
@@ -193,14 +190,11 @@
 
   /* ---------------- how it works ---------------- */
   .hero { padding: 68px 0 46px; text-align: center; max-width: 760px; margin: 0 auto; }
-  .hero .eyebrow { font: 11px var(--mono); letter-spacing: .22em; color: var(--accent);
+  .hero .eyebrow { font: 11px var(--mono); letter-spacing: .22em; color: var(--muted2);
                    text-transform: uppercase; }
   .hero h1 { font-size: 40px; line-height: 1.15; margin-top: 16px; letter-spacing: -.025em; }
-  .hero h1 .grad {
-    background: linear-gradient(100deg, var(--accent), var(--blue) 55%, var(--purple));
-    -webkit-background-clip: text; background-clip: text; color: transparent;
-    background-size: 200% 100%; animation: gradShift 6s ease infinite;
-  }
+  .hero h1 .em { color: var(--text); border-bottom: 2px solid var(--text);
+                 padding-bottom: 1px; }
   .hero p { color: var(--muted2); font-size: 16px; margin-top: 18px; line-height: 1.65; }
   .hero .ctas { display: flex; gap: 12px; justify-content: center; margin-top: 28px; }
 
@@ -208,10 +202,10 @@
                   position: relative; }
   .cnode { width: 13px; height: 13px; border-radius: 4px; background: var(--panel2);
            border: 1px solid var(--border2); position: relative; }
-  .cnode.biased { background: rgba(251,191,36,.2); border-color: rgba(251,191,36,.5); }
+  .cnode.biased { background: #2a2a2a; border-color: #555; }
   .cnode.biased::after {
     content: ""; position: absolute; inset: 0; border-radius: 4px;
-    background: rgba(45,212,191,.35); border: 1px solid var(--accent);
+    background: var(--text); border: 1px solid var(--text);
     opacity: 0; animation: sever 5s ease infinite;
   }
   .cnode:nth-child(3).biased::after { animation-delay: .4s }
@@ -249,10 +243,10 @@
                     align-items: center; font: 10px var(--mono); color: var(--muted); }
   .viz-measure .track { height: 8px; background: var(--panel2); border-radius: 4px;
                         overflow: hidden; }
-  .viz-measure .fill { height: 100%; border-radius: 4px; background: var(--amber);
+  .viz-measure .fill { height: 100%; border-radius: 4px; background: #888;
                        animation: measure 3.2s ease-in-out infinite; }
   .viz-measure .m:nth-child(2) .fill { animation-delay: .35s; }
-  .viz-measure .m:nth-child(3) .fill { animation-delay: .7s; background: var(--accent); }
+  .viz-measure .m:nth-child(3) .fill { animation-delay: .7s; background: var(--text); }
 
   /* step viz 2: locate — component grid, circuit lights up */
   .viz-grid { display: grid; grid-template-columns: repeat(8, 17px); gap: 7px; }
@@ -266,9 +260,9 @@
   /* step viz 3: cut — vector projected onto plane */
   .viz-cut svg { overflow: visible; }
   .viz-cut .plane { stroke: var(--border2); stroke-width: 1.5; }
-  .viz-cut .w { stroke: var(--amber); stroke-width: 2.5; stroke-linecap: round;
+  .viz-cut .w { stroke: var(--text); stroke-width: 2.5; stroke-linecap: round;
                 transform-origin: 40px 120px; animation: collapse 3.6s cubic-bezier(.6,0,.3,1) infinite; }
-  .viz-cut .vbias { stroke: var(--red); stroke-width: 1.5; stroke-dasharray: 4 4;
+  .viz-cut .vbias { stroke: #888; stroke-width: 1.5; stroke-dasharray: 4 4;
                     animation: fadeBias 3.6s ease infinite; }
   .viz-cut text { font: 10px var(--mono); fill: var(--muted); }
 
@@ -277,16 +271,16 @@
   .viz-prove .row { display: grid; grid-template-columns: 66px 1fr 40px; gap: 10px;
                     align-items: center; font: 10px var(--mono); color: var(--muted); }
   .viz-prove .track { height: 9px; background: var(--panel2); border-radius: 5px; overflow: hidden; }
-  .viz-prove .bias { height: 100%; background: var(--red); border-radius: 5px;
+  .viz-prove .bias { height: 100%; background: #666; border-radius: 5px;
                      animation: shrink 3.4s cubic-bezier(.5,0,.3,1) infinite; }
-  .viz-prove .ret { height: 100%; background: var(--green); border-radius: 5px; width: 99.8%; }
+  .viz-prove .ret { height: 100%; background: var(--text); border-radius: 5px; width: 99.8%; }
 
   .why { max-width: 900px; margin: 60px auto 0; }
   .whygrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 18px; }
   .whycard { background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
              padding: 20px; transition: border-color .2s, transform .2s; }
-  .whycard:hover { border-color: rgba(45,212,191,.35); transform: translateY(-2px); }
-  .whycard .ic { font-size: 19px; }
+  .whycard:hover { border-color: var(--border2); transform: translateY(-2px); }
+  .whycard .ic { font: 700 11px var(--mono); color: var(--muted); letter-spacing: .12em; }
   .whycard h4 { font-size: 14px; margin-top: 10px; }
   .whycard p { font-size: 12.5px; color: var(--muted2); margin-top: 7px; line-height: 1.6; }
 
@@ -310,14 +304,13 @@
            padding: 26px; position: relative; transition: transform .2s, border-color .2s;
            display: flex; flex-direction: column; }
   .price:hover { transform: translateY(-3px); }
-  .price.featured { border-color: rgba(45,212,191,.4);
-                    box-shadow: 0 0 40px rgba(45,212,191,.07); }
+  .price.featured { border-color: var(--text); }
   .price .tag { position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
-                background: var(--accent); color: #04211d; font: 700 10px var(--mono);
+                background: var(--text); color: #000; font: 700 10px var(--mono);
                 letter-spacing: .1em; border-radius: 5px; padding: 3px 10px;
                 text-transform: uppercase; }
   .price .current { position: absolute; top: 16px; right: 16px; font: 10px var(--mono);
-                    color: var(--green); border: 1px solid rgba(74,222,128,.4);
+                    color: var(--text); border: 1px solid var(--border2);
                     border-radius: 4px; padding: 2px 7px; text-transform: uppercase; }
   .price h3 { font-size: 15px; }
   .price .amt { font-size: 34px; font-weight: 800; margin-top: 12px; letter-spacing: -.03em; }
@@ -338,10 +331,10 @@
   .codeblock .cbhead button { margin-left: auto; background: none; border: 1px solid var(--border);
                               color: var(--muted2); font: 11px var(--mono); border-radius: 5px;
                               padding: 3px 10px; cursor: pointer; transition: all .15s; }
-  .codeblock .cbhead button:hover { color: var(--accent); border-color: rgba(45,212,191,.4); }
+  .codeblock .cbhead button:hover { color: var(--text); border-color: var(--border2); }
   .codeblock pre { padding: 16px; overflow-x: auto; font: 12px/1.7 var(--mono);
                    color: var(--muted2); }
-  .codeblock .c-k { color: var(--accent); } .codeblock .c-s { color: var(--green); }
+  .codeblock .c-k { color: var(--text); } .codeblock .c-s { color: #d4d4d4; }
   .codeblock .c-c { color: var(--muted); }
   .endpoints td:first-child { font-family: var(--mono); font-size: 12px; color: var(--accent); }
   .endpoints tr { cursor: default; }
@@ -371,8 +364,8 @@
   .drawer h3 { font-size: 11px; color: var(--muted); text-transform: uppercase;
                letter-spacing: .1em; margin: 22px 0 10px; }
   .chips { display: flex; flex-wrap: wrap; gap: 7px; }
-  .chip { font: 11px var(--mono); color: var(--accent); background: var(--accent-dim);
-          border: 1px solid rgba(45,212,191,.25); border-radius: 6px; padding: 3px 9px; }
+  .chip { font: 11px var(--mono); color: var(--text); background: var(--accent-dim);
+          border: 1px solid var(--border2); border-radius: 6px; padding: 3px 9px; }
   .bars .row { display: grid; grid-template-columns: 130px 1fr 52px; gap: 10px;
                align-items: center; margin-bottom: 7px; font-size: 12px; }
   .bars .track { height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; }
@@ -400,7 +393,7 @@
   .check { display: flex; gap: 9px; align-items: center; margin-top: 14px; font-size: 13px; }
   .check input { width: auto; }
   .modal .actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
-  #formError { color: var(--red); font-size: 12px; margin-top: 10px; min-height: 16px; }
+  #formError { color: var(--muted2); font-size: 12px; margin-top: 10px; min-height: 16px; }
   .toast {
     position: fixed; bottom: 24px; left: 50%; transform: translate(-50%, 20px);
     background: var(--panel2); border: 1px solid var(--border2); color: var(--text);
@@ -414,12 +407,10 @@
   @keyframes viewIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; } }
   @keyframes pulse { 0%, 100% { opacity: 1 } 50% { opacity: .25 } }
   @keyframes draw { to { stroke-dashoffset: 0; } }
-  @keyframes gradShift { 0%, 100% { background-position: 0% 0 } 50% { background-position: 100% 0 } }
   @keyframes sever { 0%, 30% { opacity: 0 } 45%, 80% { opacity: 1 } 95%, 100% { opacity: 0 } }
   @keyframes hotcell {
-    0%, 25% { background: var(--panel2); border-color: var(--border2); box-shadow: none; }
-    45%, 75% { background: var(--accent-dim); border-color: var(--accent);
-               box-shadow: 0 0 10px rgba(45,212,191,.4); }
+    0%, 25% { background: var(--panel2); border-color: var(--border2); }
+    45%, 75% { background: #2a2a2a; border-color: var(--text); }
     100% { background: var(--panel2); border-color: var(--border2); }
   }
   @keyframes measure { 0%, 100% { width: 82% } 50% { width: 34% } }
@@ -441,17 +432,17 @@
 
   <div class="navsec">Monitor</div>
   <div class="nav">
-    <a data-view="overview" class="active" onclick="showView('overview')">▦ &nbsp;Overview</a>
-    <a onclick="showView('overview'); $('search').value='found'; renderJobs()">⚠ &nbsp;Alerts
+    <a data-view="overview" class="active" onclick="showView('overview')">Overview</a>
+    <a onclick="showView('overview'); $('search').value='found'; renderJobs()">Alerts
       <span class="badge" id="alertCount" hidden>0</span></a>
   </div>
 
   <div class="navsec">Product</div>
   <div class="nav">
-    <a data-view="how" onclick="showView('how')">◈ &nbsp;How it works</a>
-    <a data-view="benchmarks" onclick="showView('benchmarks')">☰ &nbsp;Benchmarks</a>
-    <a data-view="pricing" onclick="showView('pricing')">◇ &nbsp;Pricing</a>
-    <a data-view="developers" onclick="showView('developers')">⌁ &nbsp;Developers</a>
+    <a data-view="how" onclick="showView('how')">How it works</a>
+    <a data-view="benchmarks" onclick="showView('benchmarks')">Benchmarks</a>
+    <a data-view="pricing" onclick="showView('pricing')">Pricing</a>
+    <a data-view="developers" onclick="showView('developers')">Developers</a>
   </div>
 
   <div class="navsec">Workspace benchmarks</div>
@@ -459,8 +450,8 @@
 
   <div class="navsec">Platform</div>
   <div class="nav">
-    <a href="/docs" target="_blank">◳ &nbsp;OpenAPI Docs</a>
-    <a onclick="openModal()">✚ &nbsp;New surgery</a>
+    <a href="/docs" target="_blank">OpenAPI Docs</a>
+    <a onclick="openModal()">New surgery</a>
   </div>
 
   <div class="sidebar-bottom">
@@ -481,7 +472,7 @@
   <div class="urlbar">
     <span class="pill" id="urlPill">scalpel.app/overview</span>
     <span class="spacer"></span>
-    <button class="btn" onclick="openModal()">✚ &nbsp;New surgery</button>
+    <button class="btn" onclick="openModal()">New surgery</button>
   </div>
 
   <!-- ================= OVERVIEW ================= -->
@@ -493,9 +484,9 @@
       </div>
 
       <div class="alertbar fade-up" id="alertbar" hidden>
-        <span class="tri">▲</span><span id="alertText"></span>
+        <span class="tri">!</span><span id="alertText"></span>
         <span class="spacer"></span>
-        <button class="btn ghost" onclick="openModal()">Remediate →</button>
+        <button class="btn ghost" onclick="openModal()">Remediate</button>
       </div>
 
       <div class="cards">
@@ -529,7 +520,7 @@
     <div class="wrap">
       <div class="hero">
         <div class="eyebrow fade-up">AI Safety · Model Editing</div>
-        <h1 class="fade-up" style="animation-delay:.08s">Find and <span class="grad">permanently remove</span> bias from AI models. Without retraining.</h1>
+        <h1 class="fade-up" style="animation-delay:.08s">Find and <span class="em">permanently remove</span> bias from AI models. Without retraining.</h1>
         <p class="fade-up" style="animation-delay:.16s">
           Scalpel is a bias-remediation platform for foundation models. It locates the exact
           internal pathways that carry a bias — down to individual attention heads — and severs
@@ -627,22 +618,22 @@
       <div class="why reveal">
         <div class="sechead"><h2>Why teams choose surgery over retraining</h2></div>
         <div class="whygrid">
-          <div class="whycard"><div class="ic">⚡</div><h4>Seconds, not weeks</h4>
+          <div class="whycard"><div class="ic">01</div><h4>Seconds, not weeks</h4>
             <p>A full measure–locate–cut–prove cycle runs in seconds on CPU. Retraining pipelines
             take weeks, GPUs, and ML staff — and still can't say <em>what changed</em>.</p></div>
-          <div class="whycard"><div class="ic">🎯</div><h4>Surgical by construction</h4>
+          <div class="whycard"><div class="ic">02</div><h4>Surgical by construction</h4>
             <p>Edits remove k dimensions out of hundreds, only in components that carry the bias.
             99.9% of model behavior is provably untouched — retention is measured, not hoped for.</p></div>
-          <div class="whycard"><div class="ic">🧾</div><h4>Compliance-native</h4>
+          <div class="whycard"><div class="ic">03</div><h4>Compliance-native</h4>
             <p>Deterministic edits + full audit trail per operation. Built for the EU AI Act era:
             evidence of measurement, remediation, and verification in one artifact.</p></div>
-          <div class="whycard"><div class="ic">🧠</div><h4>Grounded in research</h4>
+          <div class="whycard"><div class="ic">04</div><h4>Grounded in research</h4>
             <p>Built on published methods — WEAT (Caliskan et al.), diff-in-means concept probes,
             concept erasure (LEACE), directional ablation — engineered into one pipeline.</p></div>
-          <div class="whycard"><div class="ic">🔌</div><h4>Drop-in output</h4>
+          <div class="whycard"><div class="ic">05</div><h4>Drop-in output</h4>
             <p>Edited weights load with the same <code style="font-family:var(--mono)">from_pretrained</code>
             call as the original. No serving changes, no new dependencies, no lock-in.</p></div>
-          <div class="whycard"><div class="ic">📈</div><h4>Neutral, not lobotomized</h4>
+          <div class="whycard"><div class="ic">06</div><h4>Neutral, not lobotomized</h4>
             <p>Calibrated surgery targets zero measured bias rather than maximal erasure —
             avoiding the overcorrection failure mode naive debiasing methods hit.</p></div>
         </div>
@@ -667,7 +658,7 @@
           pairs, two stereotyped probe sets, and retention prompts. The same isolate–cut–prove
           pipeline runs on your domain-specific concern — brand safety, domain jargon,
           geographic bias, anything expressible as contrastive language.</p>
-          <div class="actions"><button class="btn ghost" onclick="showView('developers')">See the schema →</button></div>
+          <div class="actions"><button class="btn ghost" onclick="showView('developers')">See the schema</button></div>
         </div>
       </div>
     </div>
@@ -937,10 +928,9 @@ async function loadCatalogs() {
     biasesCache = biases;
     $("fModel").innerHTML = models.map(m => `<option>${m.model_id}</option>`).join("");
     $("fBias").innerHTML = biases.map(b => `<option>${b.name}</option>`).join("");
-    const colors = ["var(--accent)", "var(--purple)", "var(--blue)", "var(--amber)"];
-    $("benchNav").innerHTML = biases.map((b, i) =>
+    $("benchNav").innerHTML = biases.map((b) =>
       `<a onclick="showView('overview'); $('search').value='${b.name}'; renderJobs()">
-         <span class="bdot" style="background:${colors[i % 4]}"></span>${b.name}</a>`).join("");
+         <span class="bdot" style="background:var(--muted2)"></span>${b.name}</a>`).join("");
     renderBenchmarks();
   } catch (err) { /* not connected yet */ }
 }
@@ -1056,11 +1046,11 @@ function renderJobs() {
           weat = `<span class="dim">${m.bias_reduction.weat_effect_size.before}</span> → ${m.bias_reduction.weat_effect_size.after}`;
           gap = `<span class="up">−${m.bias_reduction.mean_abs_association_gap.reduction_pct}%</span>`;
           ret = (m.retention.embedding_cosine_retention * 100).toFixed(2) + "%";
-          trend = sparkline(Object.values(m.bias_after.per_probe_gaps), "var(--accent)");
+          trend = sparkline(Object.values(m.bias_after.per_probe_gaps), "#ffffff");
         } else {
           weat = `${m.bias_before.weat_effect_size}`;
           gap = `<span class="dim">audit</span>`;
-          trend = sparkline(Object.values(m.bias_before.per_probe_gaps), "var(--purple)");
+          trend = sparkline(Object.values(m.bias_before.per_probe_gaps), "#a3a3a3");
         }
       }
       const t = new Date(job.updated_at + (job.updated_at.endsWith("Z") || job.updated_at.includes("+") ? "" : "Z"));
@@ -1103,10 +1093,9 @@ function renderAlerts() {
 /* ---------------- rendering: benchmarks ---------------- */
 function renderBenchmarks() {
   if (!biasesCache.length) return;
-  const colors = ["var(--accent)", "var(--purple)", "var(--blue)", "var(--amber)"];
-  $("benchGrid").innerHTML = biasesCache.map((b, i) => `
+  $("benchGrid").innerHTML = biasesCache.map((b) => `
     <div class="benchcard reveal in">
-      <div class="top"><span class="bdot" style="width:8px;height:8px;border-radius:50%;background:${colors[i % 4]}"></span>
+      <div class="top"><span class="bdot" style="width:8px;height:8px;border-radius:50%;background:var(--text)"></span>
         <h3>${b.name}</h3><span class="groups">${b.groups.join(" vs ")}</span></div>
       <p>${b.description}</p>
       <div class="meta"><span>${b.num_contrastive_pairs} contrastive pairs</span>
