@@ -22,6 +22,12 @@ def main(argv: list[str] | None = None) -> int:
     debias.add_argument("--out", default=None, help="Directory for edited weights + report")
     debias.add_argument("--max-components", type=int, default=12)
     debias.add_argument("--cumulative-share", type=float, default=0.8)
+    debias.add_argument("--num-directions", type=int, default=1,
+                        help="Dimensionality of the erased bias subspace")
+    debias.add_argument("--audit", action="store_true",
+                        help="Audit only: measure bias and locate the circuit, no edits")
+    debias.add_argument("--calibrate", action="store_true",
+                        help="Sweep erasure strength; keep the one minimizing |WEAT|")
     debias.add_argument("--no-harden-projection", action="store_true")
     debias.add_argument("--device", default="cpu")
 
@@ -47,11 +53,17 @@ def main(argv: list[str] | None = None) -> int:
         config = SurgeryConfig(
             max_components=args.max_components,
             cumulative_share=args.cumulative_share,
+            num_directions=args.num_directions,
+            calibrate=args.calibrate,
             harden_projection=not args.no_harden_projection,
             device=args.device,
         )
         result = run_debias_pipeline(
-            model_id=args.model, bias=args.bias, config=config, save_dir=args.out
+            model_id=args.model,
+            bias=args.bias,
+            config=config,
+            save_dir=args.out,
+            audit_only=args.audit,
         )
         json.dump(result.report, sys.stdout, indent=2)
         print()

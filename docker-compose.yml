@@ -1,0 +1,21 @@
+services:
+  scalpel:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      SCALPEL_API_KEYS: ${SCALPEL_API_KEYS:?set in .env}
+      SCALPEL_TENANT_PLANS: ${SCALPEL_TENANT_PLANS:-}
+      SCALPEL_DEFAULT_PLAN: ${SCALPEL_DEFAULT_PLAN:-enterprise}
+      SCALPEL_MAX_CONCURRENT_JOBS: ${SCALPEL_MAX_CONCURRENT_JOBS:-1}
+    volumes:
+      - scalpel-data:/data
+      - hf-cache:/root/.cache/huggingface
+    deploy:
+      resources:
+        limits:
+          memory: 4g
+
+volumes:
+  scalpel-data:
+  hf-cache:

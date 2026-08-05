@@ -8,17 +8,21 @@ persisted alongside its status.
 from __future__ import annotations
 
 import json
+import shutil
 import sqlite3
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
+import httpx
+
 from scalpel.api.schemas import EditJobRequest
 from scalpel.biases.catalog import get_bias_spec, spec_from_payload
 from scalpel.config import Settings
 from scalpel.editing.surgeon import SurgeryConfig
 from scalpel.pipelines.debias import run_debias_pipeline
+from scalpel.reporting import render_report_html
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs (
@@ -26,6 +30,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     tenant TEXT NOT NULL,
     model_id TEXT NOT NULL,
     bias_name TEXT NOT NULL,
+    mode TEXT NOT NULL DEFAULT 'edit',
     status TEXT NOT NULL,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
@@ -53,16 +58,25 @@ class JobStore:
         conn.execute("PRAGMA journal_mode=WAL")
         return conn
 
-    def create(self, tenant: str, model_id: str, bias_name: str) -> str:
+    def create(self, tenant: str, model_id: str, bias_name: str, mode: str = "edit") -> str:
         job_id = f"job_{uuid.uuid4().hex[:20]}"
         now = _now()
         with self._connect() as conn:
             conn.execute(
-                "INSERT INTO jobs (id, tenant, model_id, bias_name, status, created_at,"
-                " updated_at) VALUES (?, ?, ?, ?, 'queued', ?, ?)",
-                (job_id, tenant, model_id, bias_name, now, now),
+                "INSERT INTO jobs (id, tenant, model_id, bias_name, mode, status,"
+                " created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'queued', ?, ?)",
+                (job_id, tenant, model_id, bias_name, mode, now, now),
             )
         return job_id
+
+    def count_jobs_this_month(self, tenant: str) -> int:
+        month_start = datetime.now(timezone.utc).strftime("%Y-%m-01T00:00:00")
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM jobs WHERE tenant = ? AND created_at >= ?",
+                (tenant, month_start),
+            ).fetchone()
+        return int(row[0])
 
     def update(self, job_id: str, **fields) -> None:
         fields["updated_at"] = _now()
@@ -116,6 +130,8 @@ class JobRunner:
             config = SurgeryConfig(
                 max_components=request.options.max_components,
                 cumulative_share=request.options.cumulative_share,
+                num_directions=request.options.num_directions,
+                calibrate=request.options.calibrate,
                 harden_projection=request.options.harden_projection,
                 edit_bias_terms=request.options.edit_bias_terms,
                 direction_layer=request.options.direction_layer,
@@ -126,13 +142,50 @@ class JobRunner:
                 save_dir = self.settings.artifact_dir / tenant / job_id
 
             result = run_debias_pipeline(
-                model_id=request.model_id, bias=spec, config=config, save_dir=save_dir
+                model_id=request.model_id,
+                bias=spec,
+                config=config,
+                save_dir=save_dir,
+                audit_only=(request.mode == "audit"),
             )
+
+            if result.artifact_path is not None:
+                self._package_artifacts(result.artifact_path, result.report)
+
             self.store.update(
                 job_id,
                 status="succeeded",
                 report_json=json.dumps(result.report),
                 artifact_dir=str(result.artifact_path) if result.artifact_path else None,
             )
+            self._notify(request, job_id, "succeeded", result.report)
         except Exception as exc:  # noqa: BLE001 - job boundary
-            self.store.update(job_id, status="failed", error=f"{type(exc).__name__}: {exc}")
+            error = f"{type(exc).__name__}: {exc}"
+            self.store.update(job_id, status="failed", error=error)
+            self._notify(request, job_id, "failed", {"error": error})
+
+    @staticmethod
+    def _package_artifacts(artifact_path: Path, report: dict) -> None:
+        """Write the HTML compliance report and zip edited weights for download."""
+        (artifact_path / "report.html").write_text(render_report_html(report))
+        model_dir = artifact_path / "model"
+        if model_dir.is_dir():
+            shutil.make_archive(str(artifact_path / "model"), "zip", model_dir)
+
+    @staticmethod
+    def _notify(request: EditJobRequest, job_id: str, status: str, report: dict) -> None:
+        """Fire-and-forget webhook on job completion."""
+        if not request.webhook_url:
+            return
+        payload = {
+            "job_id": job_id,
+            "status": status,
+            "model_id": request.model_id,
+            "mode": request.mode,
+            "metrics": report.get("metrics"),
+            "error": report.get("error"),
+        }
+        try:
+            httpx.post(request.webhook_url, json=payload, timeout=10.0)
+        except httpx.HTTPError:
+            pass  # delivery is best-effort; the job result is still queryable

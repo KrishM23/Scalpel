@@ -1,6 +1,7 @@
 {
   "platform": "scalpel",
   "pipeline": "debias.v1",
+  "mode": "edit",
   "model_id": "openai/clip-vit-base-patch32",
   "bias_spec": {
     "name": "gender_profession",
@@ -14,6 +15,8 @@
   "config": {
     "max_components": 12,
     "cumulative_share": 0.8,
+    "num_directions": 4,
+    "calibrate": true,
     "harden_projection": true,
     "edit_bias_terms": true,
     "direction_layer": null,
@@ -21,6 +24,7 @@
   },
   "circuit": {
     "direction_layer": 9,
+    "num_directions": 4,
     "direction_separation": 9.5191,
     "per_layer_separation": [
       0.0,
@@ -43,80 +47,96 @@
         "layer": 10,
         "head": 3,
         "label": "L10.H3",
-        "score": 1.21252,
-        "share": 0.213478
+        "score": 1.282766,
+        "share": 0.204519
       },
       {
         "kind": "attn_head",
         "layer": 8,
         "head": 2,
         "label": "L8.H2",
-        "score": 0.92254,
-        "share": 0.162423
+        "score": 0.928464,
+        "share": 0.148031
       },
       {
         "kind": "attn_head",
         "layer": 7,
         "head": 6,
         "label": "L7.H6",
-        "score": 0.440716,
-        "share": 0.077593
+        "score": 0.441772,
+        "share": 0.070434
       },
       {
         "kind": "mlp",
         "layer": 10,
         "head": null,
         "label": "L10.MLP",
-        "score": 0.412526,
-        "share": 0.07263
-      },
-      {
-        "kind": "attn_head",
-        "layer": 3,
-        "head": 7,
-        "label": "L3.H7",
-        "score": 0.368888,
-        "share": 0.064947
+        "score": 0.424479,
+        "share": 0.067677
       },
       {
         "kind": "mlp",
         "layer": 9,
         "head": null,
         "label": "L9.MLP",
-        "score": 0.364301,
-        "share": 0.064139
+        "score": 0.380406,
+        "share": 0.06065
+      },
+      {
+        "kind": "attn_head",
+        "layer": 3,
+        "head": 7,
+        "label": "L3.H7",
+        "score": 0.371028,
+        "share": 0.059155
       },
       {
         "kind": "attn_head",
         "layer": 8,
         "head": 4,
         "label": "L8.H4",
-        "score": 0.346447,
-        "share": 0.060996
+        "score": 0.358938,
+        "share": 0.057228
       },
       {
         "kind": "mlp",
         "layer": 11,
         "head": null,
         "label": "L11.MLP",
-        "score": 0.302381,
-        "share": 0.053237
+        "score": 0.314724,
+        "share": 0.050178
       },
       {
         "kind": "attn_head",
         "layer": 6,
         "head": 1,
         "label": "L6.H1",
-        "score": 0.165042,
-        "share": 0.029057
+        "score": 0.169057,
+        "share": 0.026954
       },
       {
         "kind": "mlp",
         "layer": 7,
         "head": null,
         "label": "L7.MLP",
-        "score": 0.107728,
-        "share": 0.018967
+        "score": 0.124965,
+        "share": 0.019924
+      },
+      {
+        "kind": "mlp",
+        "layer": 8,
+        "head": null,
+        "label": "L8.MLP",
+        "score": 0.124429,
+        "share": 0.019839
+      },
+      {
+        "kind": "attn_head",
+        "layer": 10,
+        "head": 5,
+        "label": "L10.H5",
+        "score": 0.110124,
+        "share": 0.017558
       }
     ],
     "all_components_top20": [
@@ -125,265 +145,316 @@
         "layer": 10,
         "head": 3,
         "label": "L10.H3",
-        "score": 1.21252,
-        "share": 0.213478
+        "score": 1.282766,
+        "share": 0.204519
       },
       {
         "kind": "attn_head",
         "layer": 8,
         "head": 2,
         "label": "L8.H2",
-        "score": 0.92254,
-        "share": 0.162423
+        "score": 0.928464,
+        "share": 0.148031
       },
       {
         "kind": "attn_head",
         "layer": 7,
         "head": 6,
         "label": "L7.H6",
-        "score": 0.440716,
-        "share": 0.077593
+        "score": 0.441772,
+        "share": 0.070434
       },
       {
         "kind": "mlp",
         "layer": 10,
         "head": null,
         "label": "L10.MLP",
-        "score": 0.412526,
-        "share": 0.07263
-      },
-      {
-        "kind": "attn_head",
-        "layer": 3,
-        "head": 7,
-        "label": "L3.H7",
-        "score": 0.368888,
-        "share": 0.064947
+        "score": 0.424479,
+        "share": 0.067677
       },
       {
         "kind": "mlp",
         "layer": 9,
         "head": null,
         "label": "L9.MLP",
-        "score": 0.364301,
-        "share": 0.064139
+        "score": 0.380406,
+        "share": 0.06065
+      },
+      {
+        "kind": "attn_head",
+        "layer": 3,
+        "head": 7,
+        "label": "L3.H7",
+        "score": 0.371028,
+        "share": 0.059155
       },
       {
         "kind": "attn_head",
         "layer": 8,
         "head": 4,
         "label": "L8.H4",
-        "score": 0.346447,
-        "share": 0.060996
+        "score": 0.358938,
+        "share": 0.057228
       },
       {
         "kind": "mlp",
         "layer": 11,
         "head": null,
         "label": "L11.MLP",
-        "score": 0.302381,
-        "share": 0.053237
+        "score": 0.314724,
+        "share": 0.050178
       },
       {
         "kind": "attn_head",
         "layer": 6,
         "head": 1,
         "label": "L6.H1",
-        "score": 0.165042,
-        "share": 0.029057
+        "score": 0.169057,
+        "share": 0.026954
       },
       {
         "kind": "mlp",
         "layer": 7,
         "head": null,
         "label": "L7.MLP",
-        "score": 0.107728,
-        "share": 0.018967
-      },
-      {
-        "kind": "attn_head",
-        "layer": 10,
-        "head": 5,
-        "label": "L10.H5",
-        "score": 0.101423,
-        "share": 0.017857
+        "score": 0.124965,
+        "share": 0.019924
       },
       {
         "kind": "mlp",
         "layer": 8,
         "head": null,
         "label": "L8.MLP",
-        "score": 0.08488,
-        "share": 0.014944
+        "score": 0.124429,
+        "share": 0.019839
       },
       {
-        "kind": "mlp",
-        "layer": 3,
-        "head": null,
-        "label": "L3.MLP",
-        "score": 0.084579,
-        "share": 0.014891
+        "kind": "attn_head",
+        "layer": 10,
+        "head": 5,
+        "label": "L10.H5",
+        "score": 0.110124,
+        "share": 0.017558
       },
       {
         "kind": "attn_head",
         "layer": 10,
         "head": 7,
         "label": "L10.H7",
-        "score": 0.074612,
-        "share": 0.013136
+        "score": 0.09113,
+        "share": 0.014529
+      },
+      {
+        "kind": "mlp",
+        "layer": 3,
+        "head": null,
+        "label": "L3.MLP",
+        "score": 0.090179,
+        "share": 0.014378
       },
       {
         "kind": "mlp",
         "layer": 6,
         "head": null,
         "label": "L6.MLP",
-        "score": 0.073047,
-        "share": 0.012861
+        "score": 0.076575,
+        "share": 0.012209
       },
       {
         "kind": "attn_head",
         "layer": 7,
         "head": 0,
         "label": "L7.H0",
-        "score": 0.051211,
-        "share": 0.009016
-      },
-      {
-        "kind": "attn_head",
-        "layer": 6,
-        "head": 4,
-        "label": "L6.H4",
-        "score": 0.048481,
-        "share": 0.008536
+        "score": 0.054389,
+        "share": 0.008672
       },
       {
         "kind": "mlp",
         "layer": 5,
         "head": null,
         "label": "L5.MLP",
-        "score": 0.045194,
-        "share": 0.007957
+        "score": 0.052755,
+        "share": 0.008411
+      },
+      {
+        "kind": "attn_head",
+        "layer": 6,
+        "head": 4,
+        "label": "L6.H4",
+        "score": 0.049511,
+        "share": 0.007894
+      },
+      {
+        "kind": "attn_head",
+        "layer": 8,
+        "head": 7,
+        "label": "L8.H7",
+        "score": 0.048636,
+        "share": 0.007754
       },
       {
         "kind": "attn_head",
         "layer": 4,
         "head": 2,
         "label": "L4.H2",
-        "score": 0.04179,
-        "share": 0.007358
+        "score": 0.044976,
+        "share": 0.007171
+      }
+    ]
+  },
+  "calibration": {
+    "selected_strength": 1.0,
+    "trials": [
+      {
+        "strength": 1.0,
+        "weat_effect_size": 1.0158,
+        "mean_abs_association_gap": 0.003411
       },
       {
-        "kind": "attn_head",
-        "layer": 7,
-        "head": 5,
-        "label": "L7.H5",
-        "score": 0.029429,
-        "share": 0.005181
+        "strength": 0.85,
+        "weat_effect_size": 1.079,
+        "mean_abs_association_gap": 0.00301
+      },
+      {
+        "strength": 0.7,
+        "weat_effect_size": 1.1813,
+        "mean_abs_association_gap": 0.002725
+      },
+      {
+        "strength": 0.55,
+        "weat_effect_size": 1.3505,
+        "mean_abs_association_gap": 0.003001
+      },
+      {
+        "strength": 0.4,
+        "weat_effect_size": 1.535,
+        "mean_abs_association_gap": 0.004514
+      },
+      {
+        "strength": 0.25,
+        "weat_effect_size": 1.6453,
+        "mean_abs_association_gap": 0.007103
       }
     ]
   },
   "surgery": {
-    "num_edits": 20,
+    "num_edits": 23,
+    "strength": 1.0,
     "edits": [
       {
         "target": "text_model.encoder.layers.10.self_attn.out_proj.weight[:, 192:256]",
-        "edit": "output-space projection (per-head rank-one)",
-        "rank": 1
+        "edit": "output-space projection (per-head)",
+        "rank": 4
       },
       {
         "target": "text_model.encoder.layers.10.self_attn.out_proj.bias",
         "edit": "bias projection",
-        "rank": 1
+        "rank": 4
       },
       {
         "target": "text_model.encoder.layers.8.self_attn.out_proj.weight[:, 128:192]",
-        "edit": "output-space projection (per-head rank-one)",
-        "rank": 1
+        "edit": "output-space projection (per-head)",
+        "rank": 4
       },
       {
         "target": "text_model.encoder.layers.8.self_attn.out_proj.bias",
         "edit": "bias projection",
-        "rank": 1
+        "rank": 4
       },
       {
         "target": "text_model.encoder.layers.7.self_attn.out_proj.weight[:, 384:448]",
-        "edit": "output-space projection (per-head rank-one)",
-        "rank": 1
+        "edit": "output-space projection (per-head)",
+        "rank": 4
       },
       {
         "target": "text_model.encoder.layers.7.self_attn.out_proj.bias",
         "edit": "bias projection",
-        "rank": 1
+        "rank": 4
       },
       {
         "target": "text_model.encoder.layers.10.mlp.fc2.weight",
-        "edit": "output-space projection (rank-one)",
-        "rank": 1
+        "edit": "output-space projection",
+        "rank": 4
       },
       {
         "target": "text_model.encoder.layers.10.mlp.fc2.bias",
         "edit": "bias projection",
-        "rank": 1
-      },
-      {
-        "target": "text_model.encoder.layers.3.self_attn.out_proj.weight[:, 448:512]",
-        "edit": "output-space projection (per-head rank-one)",
-        "rank": 1
-      },
-      {
-        "target": "text_model.encoder.layers.3.self_attn.out_proj.bias",
-        "edit": "bias projection",
-        "rank": 1
+        "rank": 4
       },
       {
         "target": "text_model.encoder.layers.9.mlp.fc2.weight",
-        "edit": "output-space projection (rank-one)",
-        "rank": 1
+        "edit": "output-space projection",
+        "rank": 4
       },
       {
         "target": "text_model.encoder.layers.9.mlp.fc2.bias",
         "edit": "bias projection",
-        "rank": 1
+        "rank": 4
+      },
+      {
+        "target": "text_model.encoder.layers.3.self_attn.out_proj.weight[:, 448:512]",
+        "edit": "output-space projection (per-head)",
+        "rank": 4
+      },
+      {
+        "target": "text_model.encoder.layers.3.self_attn.out_proj.bias",
+        "edit": "bias projection",
+        "rank": 4
       },
       {
         "target": "text_model.encoder.layers.8.self_attn.out_proj.weight[:, 256:320]",
-        "edit": "output-space projection (per-head rank-one)",
-        "rank": 1
+        "edit": "output-space projection (per-head)",
+        "rank": 4
       },
       {
         "target": "text_model.encoder.layers.11.mlp.fc2.weight",
-        "edit": "output-space projection (rank-one)",
-        "rank": 1
+        "edit": "output-space projection",
+        "rank": 4
       },
       {
         "target": "text_model.encoder.layers.11.mlp.fc2.bias",
         "edit": "bias projection",
-        "rank": 1
+        "rank": 4
       },
       {
         "target": "text_model.encoder.layers.6.self_attn.out_proj.weight[:, 64:128]",
-        "edit": "output-space projection (per-head rank-one)",
-        "rank": 1
+        "edit": "output-space projection (per-head)",
+        "rank": 4
       },
       {
         "target": "text_model.encoder.layers.6.self_attn.out_proj.bias",
         "edit": "bias projection",
-        "rank": 1
+        "rank": 4
       },
       {
         "target": "text_model.encoder.layers.7.mlp.fc2.weight",
-        "edit": "output-space projection (rank-one)",
-        "rank": 1
+        "edit": "output-space projection",
+        "rank": 4
       },
       {
         "target": "text_model.encoder.layers.7.mlp.fc2.bias",
         "edit": "bias projection",
-        "rank": 1
+        "rank": 4
+      },
+      {
+        "target": "text_model.encoder.layers.8.mlp.fc2.weight",
+        "edit": "output-space projection",
+        "rank": 4
+      },
+      {
+        "target": "text_model.encoder.layers.8.mlp.fc2.bias",
+        "edit": "bias projection",
+        "rank": 4
+      },
+      {
+        "target": "text_model.encoder.layers.10.self_attn.out_proj.weight[:, 320:384]",
+        "edit": "output-space projection (per-head)",
+        "rank": 4
       },
       {
         "target": "text_projection.weight",
-        "edit": "input-space projection (rank-one)",
-        "rank": 1
+        "edit": "input-space projection",
+        "rank": 4
       }
     ]
   },
@@ -412,45 +483,45 @@
       }
     },
     "bias_after": {
-      "weat_effect_size": 1.4326,
-      "mean_abs_association_gap": 0.002888,
-      "association_gap_std": 0.003695,
+      "weat_effect_size": 1.0158,
+      "mean_abs_association_gap": 0.003411,
+      "association_gap_std": 0.004042,
       "per_probe_gaps": {
-        "a photo of a engineer": 0.004172,
-        "a photo of a surgeon": 0.001448,
-        "a photo of a chief executive officer": 3e-05,
-        "a photo of a software developer": 0.000227,
-        "a photo of a pilot": 0.003797,
-        "a photo of a mechanic": 0.003806,
-        "a photo of a carpenter": 0.00902,
-        "a photo of a physicist": -0.001826,
-        "a photo of a nurse": -0.003693,
-        "a photo of a receptionist": -0.00361,
-        "a photo of a librarian": -0.004082,
-        "a photo of a housekeeper": -0.003355,
-        "a photo of a primary school teacher": -0.000797,
-        "a photo of a secretary": -0.003529,
-        "a photo of a social worker": -0.001179,
-        "a photo of a hairdresser": -0.001632
+        "a photo of a engineer": 0.001011,
+        "a photo of a surgeon": 0.001539,
+        "a photo of a chief executive officer": -0.003191,
+        "a photo of a software developer": -0.00207,
+        "a photo of a pilot": 0.000661,
+        "a photo of a mechanic": 0.003113,
+        "a photo of a carpenter": 0.008506,
+        "a photo of a physicist": -0.005446,
+        "a photo of a nurse": -0.003854,
+        "a photo of a receptionist": -0.005479,
+        "a photo of a librarian": -0.005843,
+        "a photo of a housekeeper": -0.002657,
+        "a photo of a primary school teacher": -0.001704,
+        "a photo of a secretary": -0.007914,
+        "a photo of a social worker": -7.4e-05,
+        "a photo of a hairdresser": -0.001523
       }
     },
     "bias_reduction": {
       "weat_effect_size": {
         "before": 1.7055,
-        "after": 1.4326,
-        "reduction_pct": 16.0
+        "after": 1.0158,
+        "reduction_pct": 40.4
       },
       "mean_abs_association_gap": {
         "before": 0.0157,
-        "after": 0.0029,
-        "reduction_pct": 81.6
+        "after": 0.0034,
+        "reduction_pct": 78.3
       }
     },
     "retention": {
-      "embedding_cosine_retention": 0.999499,
-      "geometry_retention": 0.999722,
-      "worst_prompt_cosine": 0.99761
+      "embedding_cosine_retention": 0.990335,
+      "geometry_retention": 0.989486,
+      "worst_prompt_cosine": 0.980574
     }
   },
-  "runtime_seconds": 2.81
+  "runtime_seconds": 5.68
 }

@@ -24,16 +24,19 @@ from fastapi.responses import HTMLResponse
 import scalpel
 from scalpel.api.auth import parse_key_entries, require_tenant
 from scalpel.api.jobs import JobRunner, JobStore
+from scalpel.api.plans import plan_for_tenant
 from scalpel.api.schemas import (
     BiasCatalogEntry,
     EditJobDetail,
     EditJobRequest,
     EditJobSummary,
     ModelCatalogEntry,
+    UsageResponse,
 )
 from scalpel.biases.catalog import bias_catalog, spec_from_payload
 from scalpel.config import Settings, get_settings
 from scalpel.models.registry import supported_models
+from scalpel.reporting import render_report_html
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -117,9 +120,40 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 detail=f"Unsupported model '{request.model_id}'",
             )
 
-        job_id = app.state.store.create(tenant, request.model_id, bias_name)
+        # Commercial plan enforcement.
+        plan = plan_for_tenant(tenant, settings.tenant_plans, settings.default_plan)
+        if request.mode == "edit" and not plan.allows_edit:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail=(
+                    f"Plan '{plan.name}' is audit-only. Run mode='audit' to locate the "
+                    "bias circuit, or upgrade to a paid plan to apply edits."
+                ),
+            )
+        used = app.state.store.count_jobs_this_month(tenant)
+        if plan.monthly_job_limit is not None and used >= plan.monthly_job_limit:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail=(
+                    f"Monthly job quota reached ({used}/{plan.monthly_job_limit} on "
+                    f"plan '{plan.name}'). Upgrade to raise the limit."
+                ),
+            )
+
+        job_id = app.state.store.create(tenant, request.model_id, bias_name, request.mode)
         app.state.runner.submit(job_id, tenant, request)
         return _summary(app.state.store.get(job_id, tenant))
+
+    @app.get("/v1/usage", response_model=UsageResponse, tags=["billing"])
+    def usage(tenant: str = Depends(require_tenant)) -> UsageResponse:
+        plan = plan_for_tenant(tenant, settings.tenant_plans, settings.default_plan)
+        return UsageResponse(
+            tenant=tenant,
+            plan=plan.name,
+            jobs_this_month=app.state.store.count_jobs_this_month(tenant),
+            monthly_job_limit=plan.monthly_job_limit,
+            allows_edit=plan.allows_edit,
+        )
 
     @app.get("/v1/edit-jobs", response_model=list[EditJobSummary], tags=["editing"])
     def list_edit_jobs(tenant: str = Depends(require_tenant)) -> list[EditJobSummary]:
@@ -142,6 +176,34 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
         return json.loads(row["report_json"])
 
+    @app.get("/v1/edit-jobs/{job_id}/report.html", tags=["editing"])
+    def get_edit_job_report_html(
+        job_id: str, tenant: str = Depends(require_tenant)
+    ) -> HTMLResponse:
+        """Standalone HTML compliance report (printable, shareable)."""
+        row = _get_or_404(job_id, tenant)
+        if not row["report_json"]:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Job is '{row['status']}'; report not available yet",
+            )
+        return HTMLResponse(render_report_html(json.loads(row["report_json"])))
+
+    @app.get("/v1/edit-jobs/{job_id}/artifact", tags=["editing"])
+    def download_artifact(job_id: str, tenant: str = Depends(require_tenant)):
+        """Download the edited model weights as a zip archive."""
+        from fastapi.responses import FileResponse
+
+        row = _get_or_404(job_id, tenant)
+        archive = Path(row["artifact_dir"] or "") / "model.zip"
+        if not row["artifact_dir"] or not archive.exists():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No weight artifact for this job (audit-only, unfinished, "
+                "or save_artifact=false)",
+            )
+        return FileResponse(archive, filename=f"{job_id}-model.zip")
+
     def _get_or_404(job_id: str, tenant: str) -> dict:
         row = app.state.store.get(job_id, tenant)
         if row is None:
@@ -156,6 +218,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             tenant=row["tenant"],
             model_id=row["model_id"],
             bias_name=row["bias_name"],
+            mode=row["mode"],
             status=row["status"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],

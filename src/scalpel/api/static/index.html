@@ -48,6 +48,8 @@
   .metric .label { font-size: 11px; color: var(--muted); }
   .good { color: var(--good); } .bad { color: var(--bad); }
   #error { color: var(--bad); font-size: 13px; margin-top: 10px; min-height: 18px; }
+  .sub { color: var(--muted); font-size: 13px; }
+  a { text-decoration: none; }
   .empty { color: var(--muted); font-size: 13px; padding: 20px 0; text-align: center; }
 </style>
 </head>
@@ -57,18 +59,31 @@
   <span>surgical model editing &amp; bias mitigation console</span>
 </header>
 <main>
-  <section class="panel">
-    <h2>New surgery</h2>
-    <label>API key</label>
-    <input id="apiKey" type="password" placeholder="sk_...">
-    <label>Model</label>
-    <select id="model"></select>
-    <label>Bias benchmark</label>
-    <select id="bias"></select>
-    <label>Max circuit components</label>
-    <input id="maxComponents" type="number" value="12" min="1" max="128">
-    <button id="run">Run surgery</button>
-    <div id="error"></div>
+  <section>
+    <div class="panel">
+      <h2>New job</h2>
+      <label>API key</label>
+      <input id="apiKey" type="password" placeholder="sk_...">
+      <label>Mode</label>
+      <select id="mode">
+        <option value="edit">Edit — remove the bias (paid plans)</option>
+        <option value="audit">Audit — measure &amp; locate only (free)</option>
+      </select>
+      <label>Model</label>
+      <select id="model"></select>
+      <label>Bias benchmark</label>
+      <select id="bias"></select>
+      <label>Max circuit components</label>
+      <input id="maxComponents" type="number" value="12" min="1" max="128">
+      <label>Bias subspace dimensions</label>
+      <input id="numDirections" type="number" value="1" min="1" max="16">
+      <button id="run">Run</button>
+      <div id="error"></div>
+    </div>
+    <div class="panel" id="usagePanel" style="margin-top: 24px" hidden>
+      <h2>Plan &amp; usage</h2>
+      <div id="usageBody" class="sub"></div>
+    </div>
   </section>
 
   <section>
@@ -82,6 +97,7 @@
     <div class="panel" id="detail" hidden>
       <h2>Audit report — <span id="detailId"></span></h2>
       <div class="metrics" id="detailMetrics"></div>
+      <div id="detailLinks" style="margin-top: 14px"></div>
     </div>
   </section>
 </main>
@@ -94,7 +110,7 @@ let selectedJob = null;
 $("apiKey").value = localStorage.getItem("scalpel_key") || "";
 $("apiKey").addEventListener("change", () => {
   localStorage.setItem("scalpel_key", $("apiKey").value);
-  loadCatalogs(); refresh();
+  loadCatalogs(); refresh(); loadUsage();
 });
 
 async function api(path, options = {}) {
@@ -119,13 +135,41 @@ $("run").addEventListener("click", async () => {
     const job = await api("/v1/edit-jobs", { method: "POST", body: JSON.stringify({
       model_id: $("model").value,
       bias: $("bias").value,
-      options: { max_components: parseInt($("maxComponents").value) || 12 },
+      mode: $("mode").value,
+      options: {
+        max_components: parseInt($("maxComponents").value) || 12,
+        num_directions: parseInt($("numDirections").value) || 1,
+      },
     })});
     selectedJob = job.id;
-    await refresh();
+    await refresh(); await loadUsage();
   } catch (err) { $("error").textContent = err.message; }
   $("run").disabled = false;
 });
+
+async function loadUsage() {
+  if (!$("apiKey").value) return;
+  try {
+    const u = await api("/v1/usage");
+    const limit = u.monthly_job_limit === null ? "unlimited" : u.monthly_job_limit;
+    $("usageBody").innerHTML =
+      `Tenant <b>${u.tenant}</b> · plan <b>${u.plan}</b> · ` +
+      `${u.jobs_this_month} / ${limit} jobs this month · ` +
+      (u.allows_edit ? "edits enabled" : "audit-only (upgrade to edit)");
+    $("usagePanel").hidden = false;
+  } catch (err) { /* ignore */ }
+}
+
+async function download(path, filename) {
+  const response = await fetch(path, { headers: headers() });
+  if (!response.ok) { $("error").textContent = "download failed"; return; }
+  const blob = await response.blob();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
 
 function pct(reduction) {
   const value = reduction.reduction_pct;
@@ -139,7 +183,9 @@ async function showDetail(id) {
     const report = await api(`/v1/edit-jobs/${id}/report`);
     const m = report.metrics;
     $("detailId").textContent = id;
-    $("detailMetrics").innerHTML = `
+    let cards;
+    if (m.bias_reduction) {
+      cards = `
       <div class="metric"><div class="value">${pct(m.bias_reduction.mean_abs_association_gap)}</div>
         <div class="label">association gap (${m.bias_reduction.mean_abs_association_gap.before} → ${m.bias_reduction.mean_abs_association_gap.after})</div></div>
       <div class="metric"><div class="value">${pct(m.bias_reduction.weat_effect_size)}</div>
@@ -147,11 +193,30 @@ async function showDetail(id) {
       <div class="metric"><div class="value good">${(m.retention.embedding_cosine_retention * 100).toFixed(2)}%</div>
         <div class="label">embedding retention</div></div>
       <div class="metric"><div class="value">${report.surgery.num_edits}</div>
-        <div class="label">rank-one edits applied</div></div>
+        <div class="label">projection edits applied</div></div>`;
+    } else {
+      cards = `
+      <div class="metric"><div class="value">${m.bias_before.weat_effect_size}</div>
+        <div class="label">WEAT effect size (measured, no edits)</div></div>
+      <div class="metric"><div class="value">${m.bias_before.mean_abs_association_gap}</div>
+        <div class="label">mean absolute association gap</div></div>`;
+    }
+    cards += `
       <div class="metric"><div class="value">${report.circuit.selected_components.map(c => c.label).join(", ")}</div>
-        <div class="label">severed circuit components</div></div>
+        <div class="label">bias circuit components</div></div>
       <div class="metric"><div class="value">${report.runtime_seconds}s</div>
-        <div class="label">surgery runtime</div></div>`;
+        <div class="label">runtime</div></div>`;
+    $("detailMetrics").innerHTML = cards;
+    const links = [
+      `<a href="#" onclick="download('/v1/edit-jobs/${id}/report.html', '${id}-report.html'); return false"
+          style="color: var(--accent)">Download compliance report (HTML)</a>`,
+    ];
+    if (m.bias_reduction) {
+      links.push(
+        `<a href="#" onclick="download('/v1/edit-jobs/${id}/artifact', '${id}-model.zip'); return false"
+            style="color: var(--accent)">Download edited weights (zip)</a>`);
+    }
+    $("detailLinks").innerHTML = links.join(" &nbsp;·&nbsp; ");
     $("detail").hidden = false;
   } catch (err) { /* report not ready yet */ }
 }
@@ -162,7 +227,7 @@ async function refresh() {
     const jobs = await api("/v1/edit-jobs");
     $("jobs").innerHTML = jobs.length ? jobs.map(job => `
       <tr class="job" onclick="showDetail('${job.id}')">
-        <td>${job.id.slice(0, 12)}…</td><td>${job.model_id}</td><td>${job.bias_name}</td>
+        <td>${job.id.slice(0, 12)}…</td><td>${job.model_id} <span style="color: var(--muted)">(${job.mode})</span></td><td>${job.bias_name}</td>
         <td><span class="status ${job.status}">${job.status}</span></td>
         <td>${new Date(job.updated_at).toLocaleTimeString()}</td>
       </tr>`).join("")
@@ -173,6 +238,7 @@ async function refresh() {
 
 loadCatalogs();
 refresh();
+loadUsage();
 setInterval(refresh, 2500);
 </script>
 </body>

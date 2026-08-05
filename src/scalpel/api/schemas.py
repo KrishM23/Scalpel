@@ -23,6 +23,11 @@ class CustomBiasSpecPayload(BaseModel):
 class SurgeryOptions(BaseModel):
     max_components: int = Field(default=12, ge=1, le=128)
     cumulative_share: float = Field(default=0.8, gt=0.0, le=1.0)
+    num_directions: int = Field(default=1, ge=1, le=16)
+    calibrate: bool = Field(
+        default=False,
+        description="Sweep erasure strength and keep the one minimizing residual |WEAT|",
+    )
     harden_projection: bool = True
     edit_bias_terms: bool = True
     direction_layer: int | None = Field(default=None, ge=1)
@@ -31,8 +36,12 @@ class SurgeryOptions(BaseModel):
 class EditJobRequest(BaseModel):
     model_id: str = Field(examples=["openai/clip-vit-base-patch32"])
     bias: str | CustomBiasSpecPayload = "gender_profession"
+    mode: Literal["edit", "audit"] = "edit"
     options: SurgeryOptions = SurgeryOptions()
     save_artifact: bool = True
+    webhook_url: str | None = Field(
+        default=None, description="POSTed a completion payload when the job finishes"
+    )
 
 
 class EditJobSummary(BaseModel):
@@ -40,11 +49,20 @@ class EditJobSummary(BaseModel):
     tenant: str
     model_id: str
     bias_name: str
+    mode: Literal["edit", "audit"] = "edit"
     status: Literal["queued", "running", "succeeded", "failed"]
     created_at: str
     updated_at: str
     error: str | None = None
     artifact_dir: str | None = None
+
+
+class UsageResponse(BaseModel):
+    tenant: str
+    plan: str
+    jobs_this_month: int
+    monthly_job_limit: int | None
+    allows_edit: bool
 
 
 class EditJobDetail(EditJobSummary):

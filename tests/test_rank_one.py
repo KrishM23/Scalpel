@@ -68,3 +68,33 @@ def test_bias_vector_projection():
     v = _unit(10, seed=8)
     project_vector_(b, v)
     assert abs(float(b @ v)) < 1e-6
+
+
+def test_multidirectional_basis_projection():
+    """A [k, d] basis erases the whole subspace with a rank-k update."""
+    torch.manual_seed(9)
+    w = torch.randn(20, 30)
+    original = w.clone()
+    basis = torch.linalg.qr(torch.randn(20, 3))[0].T  # orthonormal [3, 20]
+    project_out_of_output_(w, basis)
+    x = torch.randn(30, 100)
+    # No input can produce output anywhere inside the 3-D subspace.
+    assert (basis @ (w @ x)).abs().max() < 1e-5
+    # The update has rank exactly k = 3.
+    assert torch.linalg.matrix_rank(original - w, tol=1e-5) == 3
+    # Orthogonal complement untouched.
+    u = torch.randn(20)
+    u = u - basis.T @ (basis @ u)
+    assert torch.allclose(u @ w, u @ original, atol=1e-4)
+
+
+def test_non_orthonormal_basis_is_orthonormalized():
+    """Passing correlated (non-orthonormal) directions must still work."""
+    torch.manual_seed(10)
+    w = torch.randn(12, 12)
+    v1 = torch.randn(12)
+    v2 = v1 + 0.1 * torch.randn(12)  # nearly parallel to v1
+    project_out_of_output_(w, torch.stack([v1, v2]))
+    x = torch.randn(12, 50)
+    assert ((v1 / v1.norm()) @ (w @ x)).abs().max() < 1e-4
+    assert ((v2 / v2.norm()) @ (w @ x)).abs().max() < 1e-4
