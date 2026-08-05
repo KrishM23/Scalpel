@@ -16,8 +16,10 @@ from __future__ import annotations
 
 import json
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.responses import HTMLResponse
 
 import scalpel
 from scalpel.api.auth import parse_key_entries, require_tenant
@@ -56,6 +58,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/health", tags=["ops"])
     def health() -> dict:
         return {"status": "ok", "version": scalpel.__version__}
+
+    @app.get("/", include_in_schema=False)
+    def console() -> HTMLResponse:
+        """Web console. The page itself is public; every API call it makes
+        requires the tenant's API key."""
+        page = Path(__file__).parent / "static" / "index.html"
+        return HTMLResponse(page.read_text())
 
     @app.get("/v1/models", response_model=list[ModelCatalogEntry], tags=["catalog"])
     def list_models(_tenant: str = Depends(require_tenant)) -> list[ModelCatalogEntry]:

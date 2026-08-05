@@ -50,6 +50,13 @@ def test_health_is_public(client):
     assert client.get("/health").json()["status"] == "ok"
 
 
+def test_web_console_served(client):
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "Scalpel" in response.text
+
+
 def test_auth_required(client):
     assert client.get("/v1/models").status_code == 401
     assert client.get("/v1/models", headers={"X-API-Key": "wrong"}).status_code == 401
