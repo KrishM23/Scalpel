@@ -80,6 +80,6 @@ def test_head_writes_sum_to_attention_output(tiny_clip):
     acts = record_component_activations(tiny_clip, prompts)
     layer = 1
     writes = acts.head_writes(tiny_clip, layer)  # [H, N, d]
-    out_proj = tiny_clip.text_layers[layer].self_attn.out_proj
+    out_proj = tiny_clip.layers[layer].attn_out
     expected = acts.attn_head_inputs[layer] @ out_proj.weight.T
     assert torch.allclose(writes.sum(dim=0), expected, atol=1e-4)

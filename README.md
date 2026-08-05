@@ -1,11 +1,13 @@
 # Scalpel — Surgical Model Editing & Bias Mitigation Platform
 
-Scalpel is a B2B enterprise API for automated model editing. It pulls
-foundation models from Hugging Face, uses mechanistic interpretability to
-**isolate the latent circuit that transports a bias concept**, and applies
-**closed-form, low-rank projection edits** that permanently sever those
-pathways — no fine-tuning, no gradients, fully deterministic, with a
-compliance-grade audit report and quantified commercial-performance retention.
+Scalpel is a B2B enterprise API for automated model editing. Point it at **any
+compatible Hugging Face model id** — CLIP dual-encoders, causal LLMs (Llama,
+Qwen, Mistral, GPT-2, Phi, Gemma, …), or text encoders (BERT, RoBERTa, MPNet).
+It uses mechanistic interpretability to **isolate the latent circuit that
+transports a bias concept**, and applies **closed-form, low-rank projection
+edits** that permanently sever those pathways — no fine-tuning, no gradients,
+fully deterministic, with a compliance-grade audit report and quantified
+commercial-performance retention.
 
 ## Live results (openai/clip-vit-base-patch32, laptop CPU)
 
@@ -116,7 +118,7 @@ cp .env.example .env && docker compose up   # containerized, persistent /data
 
 ```
 src/scalpel/
-  models/            model registry + CLIP loading/encoding
+  models/            HF registry + architecture adapters (CLIP / LLM / encoder)
   biases/            benchmark catalog: gender_profession, age_competence,
                      ethnicity_valence + custom specs
   interpretability/  activation capture, bias subspace, circuit isolation

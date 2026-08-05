@@ -16,7 +16,8 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from transformers import CLIPModel, CLIPTokenizerFast
+import torch.nn as nn
+from transformers import PreTrainedTokenizerBase
 
 from scalpel.biases.catalog import BiasSpec, get_bias_spec
 from scalpel.editing.surgeon import SurgeryConfig, perform_surgery
@@ -41,8 +42,8 @@ def run_debias_pipeline(
     config: SurgeryConfig | None = None,
     save_dir: str | Path | None = None,
     audit_only: bool = False,
-    model: CLIPModel | None = None,
-    tokenizer: CLIPTokenizerFast | None = None,
+    model: nn.Module | None = None,
+    tokenizer: PreTrainedTokenizerBase | None = None,
 ) -> DebiasResult:
     """Run one full surgery — or, with ``audit_only``, a diagnostic audit that
     measures the bias and localizes the responsible circuit without touching
@@ -86,6 +87,8 @@ def run_debias_pipeline(
         "pipeline": "debias.v1",
         "mode": "audit" if audit_only else "edit",
         "model_id": model_id,
+        "model_family": lm.family,
+        "model_type": lm.model_type,
         "bias_spec": {
             "name": spec.name,
             "description": spec.description,
@@ -137,8 +140,7 @@ def run_debias_pipeline(
         artifact_path = Path(save_dir)
         artifact_path.mkdir(parents=True, exist_ok=True)
         if not audit_only:
-            lm.model.save_pretrained(artifact_path / "model")
-            lm.tokenizer.save_pretrained(artifact_path / "model")
+            lm.save_pretrained(artifact_path / "model")
         (artifact_path / "report.json").write_text(json.dumps(report, indent=2))
 
     return DebiasResult(report=report, edited=lm, artifact_path=artifact_path)
@@ -154,16 +156,12 @@ def _calibrated_surgery(lm, circuit, config, spec):
     tower from a snapshot and re-applies the projections scaled — no gradient
     steps, still fully deterministic.
     """
-    snapshot = {
-        name: tensor.detach().clone()
-        for name, tensor in lm.model.state_dict().items()
-        if name.startswith(("text_model.", "text_projection."))
-    }
+    snapshot = lm.snapshot_editable_state()
 
     trials = []
     best = None  # (|weat|, strength, surgery, bias_after)
     for strength in _CALIBRATION_STRENGTHS:
-        lm.model.load_state_dict(snapshot, strict=False)
+        lm.restore_editable_state(snapshot)
         surgery = perform_surgery(lm, circuit, config, strength=strength)
         bias_after = evaluate_bias(lm, spec)
         score = abs(bias_after.weat_effect_size)
@@ -179,7 +177,7 @@ def _calibrated_surgery(lm, circuit, config, spec):
 
     _, strength, surgery, bias_after = best
     # Leave the model in the winning state.
-    lm.model.load_state_dict(snapshot, strict=False)
+    lm.restore_editable_state(snapshot)
     surgery = perform_surgery(lm, circuit, config, strength=strength)
     return surgery, bias_after, {"selected_strength": strength, "trials": trials}
 

@@ -79,5 +79,23 @@ class BiasCatalogEntry(BaseModel):
 
 class ModelCatalogEntry(BaseModel):
     model_id: str
+    family: str = "clip"
+    description: str = ""
+    featured: bool = True
+
+
+class ModelCatalogResponse(BaseModel):
+    """Featured suggestions + the architecture families any HF id may use."""
+
+    accepts_any_huggingface_id: bool = True
+    families: dict
+    featured: list[ModelCatalogEntry]
+
+
+class ModelProbeResponse(BaseModel):
+    model_id: str
     family: str
+    model_type: str
+    architecture_key: str
     description: str
+    supported: bool = True

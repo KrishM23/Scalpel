@@ -6,7 +6,7 @@ attribution) and permanently removes them with closed-form rank-one weight
 edits, while measuring commercial performance retention.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 from scalpel.editing.surgeon import SurgeryConfig
 from scalpel.pipelines.debias import DebiasResult, run_debias_pipeline

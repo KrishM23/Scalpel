@@ -66,7 +66,7 @@ def _make_client(tmp_path, monkeypatch, **settings_overrides):
 
     monkeypatch.setattr(jobs_module, "run_debias_pipeline", fake_pipeline)
     settings = Settings(
-        api_keys=[API_KEY],
+        api_keys=settings_overrides.pop("api_keys", [API_KEY]),
         artifact_dir=tmp_path / "artifacts",
         database_path=tmp_path / "scalpel.db",
         tenant_plans=settings_overrides.pop("tenant_plans", {}),
@@ -113,11 +113,108 @@ def test_auth_required(client):
     assert client.get("/v1/models", headers={"X-API-Key": "wrong"}).status_code == 401
 
 
+def test_bearer_auth_accepted(client):
+    response = client.get(
+        "/v1/models", headers={"Authorization": "Bearer sk_test_12345"}
+    )
+    assert response.status_code == 200
+    assert len(response.json()) >= 1
+
+
+def test_open_keys_mode_isolates_tenants(tmp_path, monkeypatch):
+    monkeypatch.setenv("SCALPEL_OPEN_KEYS", "1")
+    with _make_client(tmp_path, monkeypatch, api_keys=[]) as client:
+        a = {"X-API-Key": "sk_finova_aaa"}
+        b = {"X-API-Key": "sk_northstar_bbb"}
+        assert client.get("/v1/usage", headers=a).json()["tenant"] == "finova_aaa"
+        assert client.get("/v1/usage", headers=b).json()["tenant"] == "northstar_bbb"
+        # Open-mode tenants get full edit capability.
+        assert client.get("/v1/usage", headers=a).json()["allows_edit"] is True
+        assert client.get("/v1/usage", headers=a).json()["plan"] == "enterprise"
+        job = client.post(
+            "/v1/edit-jobs",
+            headers=a,
+            json={"model_id": "openai/clip-vit-base-patch32", "bias": "gender_profession"},
+        ).json()
+        listing_a = client.get("/v1/edit-jobs", headers=a).json()
+        listing_b = client.get("/v1/edit-jobs", headers=b).json()
+        assert any(item["id"] == job["id"] for item in listing_a)
+        assert listing_b == []
+
+
+def test_multi_configured_keys_have_isolated_jobs(tmp_path, monkeypatch):
+    with _make_client(
+        tmp_path,
+        monkeypatch,
+        api_keys=["acme:sk_acme_1", "beta:sk_beta_1"],
+        tenant_plans={"acme": "pro", "beta": "enterprise"},
+    ) as client:
+        ha, hb = {"X-API-Key": "sk_acme_1"}, {"X-API-Key": "sk_beta_1"}
+        job = client.post(
+            "/v1/edit-jobs",
+            headers=ha,
+            json={"model_id": "openai/clip-vit-base-patch32", "bias": "gender_profession"},
+        ).json()
+        assert job["tenant"] == "acme"
+        assert any(
+            item["id"] == job["id"] for item in client.get("/v1/edit-jobs", headers=ha).json()
+        )
+        assert client.get("/v1/edit-jobs", headers=hb).json() == []
+        assert client.get("/v1/usage", headers=hb).json()["allows_edit"] is True
+
+
 def test_catalogs(client):
-    models = client.get("/v1/models", headers=HEADERS).json()
-    assert any(m["model_id"] == "openai/clip-vit-base-patch32" for m in models)
+    catalog = client.get("/v1/models", headers=HEADERS).json()
+    assert catalog["accepts_any_huggingface_id"] is True
+    assert "clip" in catalog["families"] and "causal_lm" in catalog["families"]
+    featured_ids = {m["model_id"] for m in catalog["featured"]}
+    assert "openai/clip-vit-base-patch32" in featured_ids
+    assert "patrickjohncyh/fashion-clip" in featured_ids
     biases = {b["name"] for b in client.get("/v1/biases", headers=HEADERS).json()}
     assert {"gender_profession", "age_competence", "ethnicity_valence"} <= biases
+
+
+def test_probe_accepts_any_classified_model(client, monkeypatch):
+    import scalpel.api.app as app_mod
+    from scalpel.models.registry import ModelProbe
+
+    monkeypatch.setattr(
+        app_mod,
+        "probe_model",
+        lambda model_id, trust_remote_code=True: ModelProbe(
+            model_id=model_id,
+            family="clip",
+            model_type="clip",
+            architecture_key="clip",
+            description="stub",
+        ),
+    )
+    body = client.get(
+        "/v1/models/probe",
+        params={"model_id": "laion/CLIP-ViT-B-32-laion2B-s34B-b79K"},
+        headers=HEADERS,
+    )
+    assert body.status_code == 200
+    assert body.json()["family"] == "clip"
+
+    # Job create also uses probe — non-featured ids must be accepted.
+    monkeypatch.setattr(
+        app_mod,
+        "probe_model",
+        lambda model_id, trust_remote_code=True: ModelProbe(
+            model_id=model_id,
+            family="causal_lm",
+            model_type="gpt2",
+            architecture_key="gpt2",
+            description="stub",
+        ),
+    )
+    response = client.post(
+        "/v1/edit-jobs",
+        headers=HEADERS,
+        json={"model_id": "gpt2", "bias": "gender_profession", "mode": "audit"},
+    )
+    assert response.status_code == 202
 
 
 def test_edit_job_lifecycle(client):
@@ -206,8 +303,32 @@ def test_webhook_fired_on_completion(tmp_path, monkeypatch):
     assert payload["status"] == "succeeded"
 
 
-def test_rejects_unknown_model_and_bias(client):
+def test_rejects_unknown_model_and_bias(client, monkeypatch):
+    import scalpel.api.app as app_mod
+    from scalpel.models.registry import UnsupportedArchitectureError
+
+    monkeypatch.setattr(
+        app_mod,
+        "probe_model",
+        lambda model_id, trust_remote_code=True: (_ for _ in ()).throw(
+            UnsupportedArchitectureError(f"Unsupported model '{model_id}'")
+        ),
+    )
     assert _submit(client, model_id="evil/unknown").status_code == 422
+    # Restore a permissive probe for the bias check path.
+    monkeypatch.setattr(
+        app_mod,
+        "probe_model",
+        lambda model_id, trust_remote_code=True: __import__(
+            "scalpel.models.registry", fromlist=["ModelProbe"]
+        ).ModelProbe(
+            model_id=model_id,
+            family="clip",
+            model_type="clip",
+            architecture_key="clip",
+            description="stub",
+        ),
+    )
     assert _submit(client, bias="nonexistent").status_code == 422
 
 
@@ -250,6 +371,56 @@ def test_jobstore_migrates_v01_database(tmp_path):
     store = JobStore(db)
     rows = store.list_for_tenant("acme")
     assert rows[0]["mode"] == "edit"  # backfilled default
+
+
+def test_incomplete_jobs_without_payload_fail_on_recover(tmp_path, monkeypatch):
+    from scalpel.api.jobs import JobRunner, JobStore
+
+    store = JobStore(tmp_path / "db.sqlite")
+    job_id = store.create("acme", "openai/clip-vit-base-patch32", "gender_profession")
+    store.update(job_id, status="running")
+    runner = JobRunner(
+        store,
+        Settings(api_keys=[API_KEY], artifact_dir=tmp_path / "a", database_path=tmp_path / "db.sqlite"),
+    )
+    assert runner.recover() == 0
+    row = store.get(job_id, "acme")
+    assert row["status"] == "failed"
+    assert "restart" in row["error"].lower()
+    runner.shutdown()
+
+
+def test_incomplete_jobs_with_payload_requeue(tmp_path, monkeypatch):
+    from scalpel.api.jobs import JobRunner, JobStore
+    from scalpel.api.schemas import EditJobRequest
+
+    def fake_pipeline(model_id, bias, config, save_dir=None, audit_only=False, **_kw):
+        return SimpleNamespace(report=dict(FAKE_REPORT), artifact_path=None)
+
+    monkeypatch.setattr(jobs_module, "run_debias_pipeline", fake_pipeline)
+    store = JobStore(tmp_path / "db.sqlite")
+    req = EditJobRequest(model_id="openai/clip-vit-base-patch32", bias="gender_profession")
+    job_id = store.create(
+        "acme",
+        req.model_id,
+        "gender_profession",
+        request_json=req.model_dump_json(),
+    )
+    store.update(job_id, status="running")
+    runner = JobRunner(
+        store,
+        Settings(api_keys=[API_KEY], artifact_dir=tmp_path / "a", database_path=tmp_path / "db.sqlite"),
+    )
+    assert runner.recover() == 1
+    deadline = time.time() + 5
+    while time.time() < deadline:
+        row = store.get(job_id, "acme")
+        if row["status"] == "succeeded":
+            break
+        time.sleep(0.05)
+    else:
+        raise AssertionError("requeued job did not succeed")
+    runner.shutdown()
 
 
 def test_artifact_packaging(tmp_path):

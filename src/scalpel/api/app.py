@@ -30,12 +30,18 @@ from scalpel.api.schemas import (
     EditJobDetail,
     EditJobRequest,
     EditJobSummary,
-    ModelCatalogEntry,
+    ModelCatalogResponse,
+    ModelProbeResponse,
     UsageResponse,
 )
 from scalpel.biases.catalog import bias_catalog, spec_from_payload
 from scalpel.config import Settings, get_settings
-from scalpel.models.registry import supported_models
+from scalpel.models.adapters import supported_families
+from scalpel.models.registry import (
+    UnsupportedArchitectureError,
+    featured_models,
+    probe_model,
+)
 from scalpel.reporting import render_report_html
 
 
@@ -48,6 +54,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.api_keys = parse_key_entries(settings.api_keys)
         app.state.store = JobStore(settings.database_path)
         app.state.runner = JobRunner(app.state.store, settings)
+        # Resume (or cleanly fail) jobs left incomplete by a prior process.
+        app.state.runner.recover()
         yield
         app.state.runner.shutdown()
 
@@ -69,12 +77,46 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         page = Path(__file__).parent / "static" / "index.html"
         return HTMLResponse(page.read_text())
 
-    @app.get("/v1/models", response_model=list[ModelCatalogEntry], tags=["catalog"])
-    def list_models(_tenant: str = Depends(require_tenant)) -> list[ModelCatalogEntry]:
-        return [
-            ModelCatalogEntry(model_id=model_id, **meta)
-            for model_id, meta in supported_models().items()
-        ]
+    @app.get("/v1/models", response_model=ModelCatalogResponse, tags=["catalog"])
+    def list_models(_tenant: str = Depends(require_tenant)) -> ModelCatalogResponse:
+        """Featured models plus the architecture families any HF id can use.
+
+        Scalpel is not limited to the featured list — POST /v1/edit-jobs with
+        any Hugging Face model id whose ``model_type`` is in a supported family.
+        """
+        return ModelCatalogResponse(
+            accepts_any_huggingface_id=True,
+            families=supported_families(),
+            featured=[
+                {
+                    "model_id": model_id,
+                    "family": meta["family"],
+                    "description": meta["description"],
+                    "featured": True,
+                }
+                for model_id, meta in featured_models().items()
+            ],
+        )
+
+    @app.get("/v1/models/probe", response_model=ModelProbeResponse, tags=["catalog"])
+    def probe_model_endpoint(
+        model_id: str, _tenant: str = Depends(require_tenant)
+    ) -> ModelProbeResponse:
+        """Classify a Hugging Face model id without downloading weights."""
+        try:
+            info = probe_model(model_id)
+        except UnsupportedArchitectureError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+            ) from exc
+        return ModelProbeResponse(
+            model_id=info.model_id,
+            family=info.family,
+            model_type=info.model_type,
+            architecture_key=info.architecture_key,
+            description=info.description,
+            supported=True,
+        )
 
     @app.get("/v1/biases", response_model=list[BiasCatalogEntry], tags=["catalog"])
     def list_biases(_tenant: str = Depends(require_tenant)) -> list[BiasCatalogEntry]:
@@ -114,11 +156,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 ) from exc
             bias_name = request.bias.name
 
-        if request.model_id not in supported_models():
+        try:
+            probe_model(request.model_id)
+        except UnsupportedArchitectureError as exc:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Unsupported model '{request.model_id}'",
-            )
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+            ) from exc
 
         # Commercial plan enforcement.
         plan = plan_for_tenant(tenant, settings.tenant_plans, settings.default_plan)
@@ -140,7 +183,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 ),
             )
 
-        job_id = app.state.store.create(tenant, request.model_id, bias_name, request.mode)
+        job_id = app.state.store.create(
+            tenant,
+            request.model_id,
+            bias_name,
+            request.mode,
+            request_json=request.model_dump_json(),
+        )
         app.state.runner.submit(job_id, tenant, request)
         return _summary(app.state.store.get(job_id, tenant))
 

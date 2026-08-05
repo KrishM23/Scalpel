@@ -824,7 +824,10 @@ model = CLIPModel.from_pretrained(<span class="c-s">"./model"</span>)</pre>
   <div class="modal">
     <h2>New surgery</h2>
     <div class="hint">Closed-form bias removal. Audit mode measures and locates without editing.</div>
-    <label>Model</label><select id="fModel"></select>
+    <label>Model (featured)</label><select id="fModel"></select>
+    <label>Or any Hugging Face model id</label>
+    <input id="fModelCustom" type="text" placeholder="e.g. patrickjohncyh/fashion-clip, gpt2, Qwen/Qwen2.5-0.5B">
+    <div class="hint" style="margin-top:-4px">Works with CLIP, causal LMs (Llama/Qwen/Mistral/GPT-2/…), and text encoders (BERT/RoBERTa). Not limited to the dropdown.</div>
     <label>Bias benchmark</label><select id="fBias"></select>
     <div class="row2">
       <div><label>Mode</label>
@@ -874,11 +877,28 @@ function observeReveals() {
 }
 
 /* ---------------- api ---------------- */
-const headers = () => ({ "X-API-Key": $("apiKey").value, "Content-Type": "application/json" });
+function currentKey() { return ($("apiKey").value || "").trim(); }
+const headers = () => ({
+  "X-API-Key": currentKey(),
+  "Authorization": currentKey() ? `Bearer ${currentKey()}` : "",
+  "Content-Type": "application/json",
+});
+function formatDetail(detail) {
+  if (detail == null) return "request failed";
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail.map(d => d.msg || JSON.stringify(d)).join("; ");
+  }
+  return JSON.stringify(detail);
+}
 async function api(path, options = {}) {
   const response = await fetch(path, { headers: headers(), ...options });
-  if (!response.ok) throw new Error((await response.json()).detail || response.statusText);
-  return response.json();
+  let body = null;
+  try { body = await response.json(); } catch (_) { /* non-json */ }
+  if (!response.ok) {
+    throw new Error(formatDetail(body && body.detail) || response.statusText || `HTTP ${response.status}`);
+  }
+  return body;
 }
 
 /* ---------------- demo data ---------------- */
@@ -928,21 +948,30 @@ function demoReport(job) {
 
 /* ---------------- data loading ---------------- */
 async function loadCatalogs() {
+  if (!DEMO && !currentKey()) return;
   try {
-    const [models, biases] = DEMO
-      ? [[{ model_id: "openai/clip-vit-base-patch32" }], DEMO_BIASES]
+    const [catalog, biases] = DEMO
+      ? [{ featured: [{ model_id: "openai/clip-vit-base-patch32" }, { model_id: "patrickjohncyh/fashion-clip" }, { model_id: "gpt2" }] }, DEMO_BIASES]
       : await Promise.all([api("/v1/models"), api("/v1/biases")]);
     biasesCache = biases;
-    $("fModel").innerHTML = models.map(m => `<option>${m.model_id}</option>`).join("");
+    const models = catalog.featured || catalog;
+    $("fModel").innerHTML = models.map(m => `<option value="${m.model_id}">${m.model_id}</option>`).join("");
     $("fBias").innerHTML = biases.map(b => `<option>${b.name}</option>`).join("");
     $("benchNav").innerHTML = biases.map((b) =>
       `<a onclick="showView('overview'); $('search').value='${b.name}'; renderJobs()">
          <span class="bdot" style="background:var(--field)"></span>${b.name}</a>`).join("");
     renderBenchmarks();
-  } catch (err) { /* not connected yet */ }
+  } catch (err) {
+    $("connText").textContent = err.message.slice(0, 48);
+  }
 }
 
 async function loadUsage() {
+  if (!DEMO && !currentKey()) {
+    $("connDot").classList.remove("on");
+    $("connText").textContent = "enter an API key";
+    return;
+  }
   try {
     const u = DEMO
       ? { tenant: "finova-ai", plan: "pro", jobs_this_month: 14, monthly_job_limit: 100 }
@@ -966,12 +995,14 @@ async function loadUsage() {
     });
   } catch (err) {
     $("connDot").classList.remove("on");
-    $("connText").textContent = "invalid key";
+    $("connText").textContent = err.message.slice(0, 48) || "invalid key";
   }
 }
 
 async function getReport(job) {
+  if (!job) return null;
   if (reportCache.has(job.id)) return reportCache.get(job.id);
+  if (job.status !== "succeeded") return null;
   try {
     const report = DEMO ? demoReport(job) : await api(`/v1/edit-jobs/${job.id}/report`);
     reportCache.set(job.id, report);
@@ -979,16 +1010,35 @@ async function getReport(job) {
   } catch (err) { return null; }
 }
 
+async function hydrateReports(jobs) {
+  const pending = jobs.filter(j => j.status === "succeeded" && !reportCache.has(j.id));
+  if (!pending.length) return;
+  await Promise.all(pending.map(async (job) => {
+    await getReport(job);
+    // Re-render as each report lands so the table never stays blank.
+    renderStats(); renderJobs(); renderAlerts();
+  }));
+}
+
 async function refresh() {
-  if (!DEMO && !$("apiKey").value) return;
+  if (!DEMO && !currentKey()) {
+    $("jobs").innerHTML = `<tr><td colspan="8" class="empty">Enter an API key to load your jobs</td></tr>`;
+    return;
+  }
   try {
     jobsData = DEMO ? DEMO_JOBS : await api("/v1/edit-jobs");
-    await Promise.all(jobsData.filter(j => j.status === "succeeded").map(getReport));
+    // Render the job list immediately — do NOT wait on report downloads.
     renderStats(); renderJobs(); renderAlerts();
     $("subtitle").textContent =
       `${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}` +
       ` · ${jobsData.length} jobs · ${new Set(jobsData.map(j => j.bias_name)).size} benchmarks`;
-  } catch (err) { /* offline */ }
+    // Hydrate metrics in the background for succeeded jobs.
+    hydrateReports(jobsData);
+  } catch (err) {
+    $("jobs").innerHTML = `<tr><td colspan="8" class="empty">${err.message}</td></tr>`;
+    $("connDot").classList.remove("on");
+    $("connText").textContent = err.message.slice(0, 48);
+  }
 }
 
 /* ---------------- rendering: overview ---------------- */
@@ -1043,11 +1093,15 @@ function statusPill(job, report) {
 function renderJobs() {
   const filter = $("search").value.toLowerCase();
   const rows = jobsData
-    .filter(j => (j.id + j.bias_name + j.mode + j.status).toLowerCase().includes(filter))
+    .filter(j => (j.id + j.bias_name + j.mode + j.status + (j.error || "")).toLowerCase().includes(filter))
     .map(job => {
       const r = reportCache.get(job.id);
       let weat = "—", gap = "—", ret = "—", trend = "";
-      if (r) {
+      if (job.status === "failed") {
+        weat = `<span class="dim" title="${(job.error || "").replace(/"/g, "&quot;")}">${(job.error || "failed").slice(0, 28)}</span>`;
+      } else if (job.status === "queued" || job.status === "running") {
+        weat = `<span class="dim">${job.status}…</span>`;
+      } else if (r) {
         const m = r.metrics;
         if (m.bias_reduction) {
           weat = `<span class="dim">${m.bias_reduction.weat_effect_size.before}</span> → ${m.bias_reduction.weat_effect_size.after}`;
@@ -1063,7 +1117,7 @@ function renderJobs() {
       const t = new Date(job.updated_at + (job.updated_at.endsWith("Z") || job.updated_at.includes("+") ? "" : "Z"));
       return `<tr class="${selectedJob === job.id ? "selected" : ""}" onclick="showDetail('${job.id}')">
         <td class="jobname">${job.id.slice(0, 16)}…</td>
-        <td class="mono dim">${job.bias_name}</td>
+        <td class="mono dim">${job.bias_name}<div class="dim" style="font-size:10px">${job.mode}</div></td>
         <td>${statusPill(job, r)}</td>
         <td class="mono">${weat}</td>
         <td class="mono">${gap}</td>
@@ -1073,7 +1127,7 @@ function renderJobs() {
       </tr>`;
     });
   $("jobs").innerHTML = rows.length ? rows.join("")
-    : `<tr><td colspan="8" class="empty">No jobs match — run your first surgery</td></tr>`;
+    : `<tr><td colspan="8" class="empty">No jobs yet — click New surgery to run one</td></tr>`;
   $("jobCount").textContent = `${rows.length} jobs`;
 }
 
@@ -1119,8 +1173,27 @@ async function showDetail(id) {
   selectedJob = id;
   renderJobs();
   const job = jobsData.find(j => j.id === id);
+  if (!job) return;
+  if (job.status === "failed") {
+    $("dPill").outerHTML = statusPill(job, null).replace("<span", '<span id="dPill"');
+    $("dId").textContent = id;
+    $("dCards").innerHTML = `<div class="cell" style="grid-column:1/-1"><div class="k">error</div>
+      <div class="v" style="font-size:13px;font-weight:500;white-space:pre-wrap">${job.error || "unknown"}</div></div>`;
+    $("dChips").innerHTML = ""; $("dBars").innerHTML = ""; $("dActions").innerHTML = "";
+    $("drawer").classList.add("open");
+    return;
+  }
+  if (job.status !== "succeeded") {
+    $("dPill").outerHTML = statusPill(job, null).replace("<span", '<span id="dPill"');
+    $("dId").textContent = id;
+    $("dCards").innerHTML = `<div class="cell" style="grid-column:1/-1"><div class="k">status</div>
+      <div class="v">${job.status}</div><div class="s">report available when the job succeeds</div></div>`;
+    $("dChips").innerHTML = ""; $("dBars").innerHTML = ""; $("dActions").innerHTML = "";
+    $("drawer").classList.add("open");
+    return;
+  }
   const r = await getReport(job);
-  if (!r) return;
+  if (!r) { toast("Report not ready yet — try again in a moment"); return; }
   const m = r.metrics, edit = !!m.bias_reduction;
   $("dPill").outerHTML = statusPill(job, r).replace("<span", '<span id="dPill"');
   $("dId").textContent = id;
@@ -1170,14 +1243,31 @@ function copyCode(button) {
 
 async function submitJob() {
   if (DEMO) { closeModal(); toast("Demo mode — connect an API key to run real surgeries"); return; }
+  if (!currentKey()) { $("formError").textContent = "Enter an API key in the sidebar first"; return; }
   $("fSubmit").disabled = true; $("formError").textContent = "";
   try {
+    // Persist key before the request so subsequent polls use it.
+    localStorage.setItem("scalpel_key", currentKey());
+    const custom = ($("fModelCustom").value || "").trim();
+    const modelId = custom || $("fModel").value;
     const job = await api("/v1/edit-jobs", { method: "POST", body: JSON.stringify({
-      model_id: $("fModel").value, bias: $("fBias").value, mode: $("fMode").value,
-      options: { num_directions: parseInt($("fK").value) || 1, calibrate: $("fCalibrate").checked },
+      model_id: modelId, bias: $("fBias").value, mode: $("fMode").value,
+      options: {
+        num_directions: parseInt($("fK").value) || 1,
+        calibrate: $("fCalibrate").checked,
+        max_components: 12,
+      },
     })});
-    closeModal(); showView("overview"); toast(`Job ${job.id.slice(0, 16)}… queued`);
-    selectedJob = job.id; await refresh(); loadUsage();
+    closeModal();
+    $("search").value = "";
+    showView("overview");
+    // Optimistic insert so the job is visible immediately.
+    jobsData = [job, ...jobsData.filter(j => j.id !== job.id)];
+    selectedJob = job.id;
+    renderJobs(); renderStats(); renderAlerts();
+    toast(`Job ${job.id.slice(0, 16)}… queued`);
+    await refresh();
+    loadUsage();
   } catch (err) { $("formError").textContent = err.message; }
   $("fSubmit").disabled = false;
 }
@@ -1200,17 +1290,28 @@ $("vizGrid").innerHTML = Array.from({ length: 32 }, (_, i) =>
   `<i class="${[3, 10, 17, 20, 26].includes(i) ? "hot" : ""}"></i>`).join("");
 
 $("apiKey").value = localStorage.getItem("scalpel_key") || "";
-$("apiKey").addEventListener("change", () => {
-  localStorage.setItem("scalpel_key", $("apiKey").value);
-  reportCache.clear(); loadCatalogs(); loadUsage(); refresh();
+let keyTimer = null;
+function onKeyUpdated() {
+  localStorage.setItem("scalpel_key", currentKey());
+  reportCache.clear();
+  jobsData = [];
+  loadCatalogs(); loadUsage(); refresh();
+}
+$("apiKey").addEventListener("change", onKeyUpdated);
+$("apiKey").addEventListener("input", () => {
+  clearTimeout(keyTimer);
+  keyTimer = setTimeout(onKeyUpdated, 400);
 });
 $("search").addEventListener("input", renderJobs);
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeDrawer(); closeModal(); } });
 
 const initialView = Object.entries(VIEW_PATHS).find(([, p]) => location.hash === `#${p}`);
 showView(initialView ? initialView[0] : "overview");
-loadCatalogs(); loadUsage(); refresh();
-setInterval(refresh, 3000);
+if (DEMO || currentKey()) { loadCatalogs(); loadUsage(); refresh(); }
+else {
+  $("jobs").innerHTML = `<tr><td colspan="8" class="empty">Enter an API key in the sidebar to load jobs</td></tr>`;
+}
+setInterval(refresh, 2500);
 </script>
 </body>
 </html>

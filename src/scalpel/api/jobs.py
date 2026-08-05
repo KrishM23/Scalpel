@@ -2,12 +2,14 @@
 
 Jobs survive process restarts; execution happens on a bounded thread pool so
 the API stays responsive while surgeries run. Each job's full audit report is
-persisted alongside its status.
+persisted alongside its status. Incomplete jobs are recovered on startup when
+the original request payload was stored.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 import sqlite3
 import uuid
@@ -24,6 +26,8 @@ from scalpel.editing.surgeon import SurgeryConfig
 from scalpel.pipelines.debias import run_debias_pipeline
 from scalpel.reporting import render_report_html
 
+log = logging.getLogger(__name__)
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs (
     id TEXT PRIMARY KEY,
@@ -36,7 +40,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     updated_at TEXT NOT NULL,
     error TEXT,
     artifact_dir TEXT,
-    report_json TEXT
+    report_json TEXT,
+    request_json TEXT
 );
 """
 
@@ -59,6 +64,8 @@ class JobStore:
         columns = {row[1] for row in conn.execute("PRAGMA table_info(jobs)")}
         if "mode" not in columns:
             conn.execute("ALTER TABLE jobs ADD COLUMN mode TEXT NOT NULL DEFAULT 'edit'")
+        if "request_json" not in columns:
+            conn.execute("ALTER TABLE jobs ADD COLUMN request_json TEXT")
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path)
@@ -66,14 +73,21 @@ class JobStore:
         conn.execute("PRAGMA journal_mode=WAL")
         return conn
 
-    def create(self, tenant: str, model_id: str, bias_name: str, mode: str = "edit") -> str:
+    def create(
+        self,
+        tenant: str,
+        model_id: str,
+        bias_name: str,
+        mode: str = "edit",
+        request_json: str | None = None,
+    ) -> str:
         job_id = f"job_{uuid.uuid4().hex[:20]}"
         now = _now()
         with self._connect() as conn:
             conn.execute(
                 "INSERT INTO jobs (id, tenant, model_id, bias_name, mode, status,"
-                " created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'queued', ?, ?)",
-                (job_id, tenant, model_id, bias_name, mode, now, now),
+                " created_at, updated_at, request_json) VALUES (?, ?, ?, ?, ?, 'queued', ?, ?, ?)",
+                (job_id, tenant, model_id, bias_name, mode, now, now, request_json),
             )
         return job_id
 
@@ -110,6 +124,14 @@ class JobStore:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def list_incomplete(self) -> list[dict]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM jobs WHERE status IN ('queued', 'running') "
+                "ORDER BY created_at ASC"
+            ).fetchall()
+        return [dict(row) for row in rows]
+
 
 class JobRunner:
     """Executes edit jobs on a bounded worker pool."""
@@ -124,11 +146,44 @@ class JobRunner:
     def submit(self, job_id: str, tenant: str, request: EditJobRequest) -> None:
         self.executor.submit(self._run, job_id, tenant, request)
 
+    def recover(self) -> int:
+        """Requeue incomplete jobs after a process restart.
+
+        Jobs without a persisted request payload cannot be resumed and are
+        marked failed so they do not permanently starve the worker pool.
+        """
+        recovered = 0
+        for row in self.store.list_incomplete():
+            job_id = row["id"]
+            raw = row.get("request_json")
+            if not raw:
+                self.store.update(
+                    job_id,
+                    status="failed",
+                    error="Interrupted by server restart; resubmit the job",
+                )
+                log.warning("Abandoned incomplete job %s (no request payload)", job_id)
+                continue
+            try:
+                request = EditJobRequest.model_validate_json(raw)
+            except Exception as exc:  # noqa: BLE001
+                self.store.update(
+                    job_id,
+                    status="failed",
+                    error=f"Invalid stored request after restart: {exc}",
+                )
+                continue
+            self.store.update(job_id, status="queued", error=None)
+            self.submit(job_id, row["tenant"], request)
+            recovered += 1
+            log.info("Requeued job %s after restart", job_id)
+        return recovered
+
     def shutdown(self) -> None:
         self.executor.shutdown(wait=False, cancel_futures=True)
 
     def _run(self, job_id: str, tenant: str, request: EditJobRequest) -> None:
-        self.store.update(job_id, status="running")
+        self.store.update(job_id, status="running", error=None)
         try:
             if isinstance(request.bias, str):
                 spec = get_bias_spec(request.bias)
@@ -169,6 +224,7 @@ class JobRunner:
             self._notify(request, job_id, "succeeded", result.report)
         except Exception as exc:  # noqa: BLE001 - job boundary
             error = f"{type(exc).__name__}: {exc}"
+            log.exception("Job %s failed", job_id)
             self.store.update(job_id, status="failed", error=error)
             self._notify(request, job_id, "failed", {"error": error})
 

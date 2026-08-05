@@ -32,7 +32,20 @@ PLANS: dict[str, Plan] = {
 
 
 def plan_for_tenant(tenant: str, tenant_plans: dict[str, str], default_plan: str) -> Plan:
-    name = tenant_plans.get(tenant, default_plan)
+    """Resolve the commercial plan for a tenant.
+
+    When ``SCALPEL_OPEN_KEYS`` is enabled, unmapped tenants (including
+    per-key open-mode tenants) always receive enterprise so every key can
+    run full edit surgeries.
+    """
+    from scalpel.api.auth import open_keys_enabled
+
+    if tenant in tenant_plans:
+        name = tenant_plans[tenant]
+    elif open_keys_enabled():
+        name = "enterprise"
+    else:
+        name = default_plan
     if name not in PLANS:
         raise ValueError(f"Unknown plan '{name}' (available: {sorted(PLANS)})")
     return PLANS[name]

@@ -1,15 +1,12 @@
-"""Activation capture for the CLIP text tower.
+"""Activation capture for the text tower (any supported architecture).
 
-We record, at the pooled (EOT) token position for every prompt:
+We record, at the pooled token position for every prompt:
 
-- the residual stream after every encoder layer (``resid``),
-- the input to every attention block's output projection, i.e. the
-  concatenated per-head outputs before mixing (``attn_head_inputs``), and
-- the output of every MLP block's down-projection (``mlp_out``).
+- the residual stream after every encoder/decoder layer (``resid``),
+- the input to every attention block's output projection (``attn_head_inputs``),
+- the output of every MLP down-projection (``mlp_out``).
 
-These are exactly the quantities needed to (a) estimate a bias direction in
-the residual stream and (b) attribute how much each attention head and MLP
-writes onto that direction.
+These feed bias-direction estimation and circuit attribution.
 """
 
 from __future__ import annotations
@@ -37,19 +34,20 @@ class ComponentActivations:
     mlp_out: torch.Tensor
 
     def head_writes(self, lm: LoadedModel, layer: int) -> torch.Tensor:
-        """Per-head residual-stream writes at ``layer``: [num_heads, N, d].
-
-        Head h of the attention block writes ``W_O[:, h*dh:(h+1)*dh] @ z_h``
-        into the residual stream, where ``z`` is the concatenated head output
-        we captured as the out_proj input.
-        """
-        w_o = lm.text_layers[layer].self_attn.out_proj.weight  # [d, d]
+        """Per-head residual-stream writes at ``layer``: [num_heads, N, d]."""
+        view = lm.layers[layer]
+        w_o = view.attn_weight
         z = self.attn_head_inputs[layer]  # [N, d]
         dh = lm.head_dim
         writes = []
         for h in range(lm.num_heads):
             cols = slice(h * dh, (h + 1) * dh)
-            writes.append(z[:, cols] @ w_o[:, cols].T)  # [N, d]
+            if view.layout == "conv1d":
+                # y = z @ W  with W [d_in, d_out]; head h owns input rows.
+                writes.append(z[:, cols] @ w_o[cols, :])
+            else:
+                # y = z @ W.T  with W [d_out, d_in]; head h owns weight columns.
+                writes.append(z[:, cols] @ w_o[:, cols].T)
         return torch.stack(writes, dim=0)
 
 
@@ -65,8 +63,8 @@ def record_component_activations(
 
     for start in range(0, len(texts), batch_size):
         batch = lm.tokenize(texts[start : start + batch_size])
-        eot = lm.eot_positions(batch["input_ids"])
-        rows = torch.arange(eot.shape[0], device=lm.device)
+        pool = lm.pool_positions(batch["input_ids"])
+        rows = torch.arange(pool.shape[0], device=lm.device)
 
         attn_inputs: list[torch.Tensor | None] = [None] * num_layers
         mlp_outputs: list[torch.Tensor | None] = [None] * num_layers
@@ -84,19 +82,18 @@ def record_component_activations(
             return hook
 
         with ExitStack() as stack:
-            for i, layer in enumerate(lm.text_layers):
+            for i, view in enumerate(lm.layers):
                 stack.callback(
-                    layer.self_attn.out_proj.register_forward_pre_hook(make_attn_hook(i)).remove
+                    view.attn_out.register_forward_pre_hook(make_attn_hook(i)).remove
                 )
-                stack.callback(layer.mlp.fc2.register_forward_hook(make_mlp_hook(i)).remove)
-            outputs = lm.model.text_model(**batch, output_hidden_states=True)
+                stack.callback(view.mlp_out.register_forward_hook(make_mlp_hook(i)).remove)
+            outputs = lm.forward_hidden_states(batch)
 
-        # hidden_states: tuple of L+1 tensors [B, T, d]
         resid_chunks.append(
-            torch.stack([hs[rows, eot] for hs in outputs.hidden_states], dim=0)
+            torch.stack([hs[rows, pool] for hs in outputs.hidden_states], dim=0)
         )
-        attn_chunks.append(torch.stack([a[rows, eot] for a in attn_inputs], dim=0))
-        mlp_chunks.append(torch.stack([m[rows, eot] for m in mlp_outputs], dim=0))
+        attn_chunks.append(torch.stack([a[rows, pool] for a in attn_inputs], dim=0))
+        mlp_chunks.append(torch.stack([m[rows, pool] for m in mlp_outputs], dim=0))
 
     return ComponentActivations(
         resid=torch.cat(resid_chunks, dim=1),

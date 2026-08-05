@@ -53,7 +53,7 @@ def test_surgery_annihilates_selected_component_writes(tiny_clip):
     # for MLP, v is the left-null direction created by the edit.
     for comp in circuit["selected_components"]:
         if comp["kind"] == "mlp":
-            w = lm.text_layers[comp["layer"]].mlp.fc2.weight
+            w = lm.layers[comp["layer"]].mlp_weight
             # Smallest left singular value direction should annihilate outputs.
             _, s, _ = torch.linalg.svd(w)
             assert s[-1] < 1e-4  # rank deficiency introduced by the projection

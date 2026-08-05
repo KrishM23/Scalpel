@@ -3,11 +3,11 @@
 For every selected circuit component the corresponding weight matrix is edited
 in closed form so it can no longer write onto the bias direction:
 
-- attention head ``(layer, head)``: project the head's column-slice of
-  ``self_attn.out_proj.weight`` (a rank-one update per head),
-- MLP block ``layer``: project ``mlp.fc2.weight`` and its bias,
-- optionally, harden ``text_projection`` so any residual bias signal produced
-  by unedited components cannot be read into the shared embedding space.
+- attention head ``(layer, head)``: project the head's slice of the attention
+  output projection,
+- MLP block ``layer``: project the MLP down-projection (+ bias),
+- optionally (CLIP), harden ``text_projection`` so residual bias cannot leak
+  into the shared embedding space.
 """
 
 from __future__ import annotations
@@ -28,20 +28,15 @@ from scalpel.models.registry import LoadedModel
 
 @dataclass
 class SurgeryConfig:
-    """Tunable knobs for one surgery.
-
-    max_components / cumulative_share control how much of the attributed bias
-    circuit is severed; harden_projection additionally projects the bias
-    direction out of the text_projection read-out map.
-    """
+    """Tunable knobs for one surgery."""
 
     max_components: int = 12
     cumulative_share: float = 0.8
-    num_directions: int = 1  # dimensionality of the erased bias subspace
-    calibrate: bool = False  # sweep erasure strength to minimize residual |WEAT|
+    num_directions: int = 1
+    calibrate: bool = False
     harden_projection: bool = True
     edit_bias_terms: bool = True
-    direction_layer: int | None = None  # None = auto-select most separable layer
+    direction_layer: int | None = None
     device: str = "cpu"
 
     def to_dict(self) -> dict:
@@ -75,15 +70,41 @@ class SurgeryRecord:
         }
 
 
+def _project_attn_head_(
+    weight: torch.Tensor,
+    v: torch.Tensor,
+    cols: slice,
+    layout: str,
+    strength: float,
+) -> None:
+    if layout == "conv1d":
+        # y = x @ W; head owns input rows; erase v from output space of that block.
+        basis_rows = weight[cols, :]
+        # Reuse input-space style math on the [dh, d_out] block:
+        # block' = block @ (I - V^T V)
+        from scalpel.editing.rank_one import _as_orthonormal_basis
+
+        basis = _as_orthonormal_basis(v, weight.dtype)
+        weight[cols, :] = basis_rows - strength * ((basis_rows @ basis.T) @ basis)
+    else:
+        project_out_of_columns_(weight, v, cols, strength)
+
+
+def _project_mlp_out_(
+    weight: torch.Tensor, v: torch.Tensor, layout: str, strength: float
+) -> None:
+    if layout == "conv1d":
+        # y = x @ W → erase output space via W' = W (I - V^T V)
+        project_out_of_input_(weight, v, strength)
+    else:
+        project_out_of_output_(weight, v, strength)
+
+
 @torch.no_grad()
 def perform_surgery(
     lm: LoadedModel, circuit: BiasCircuit, config: SurgeryConfig, strength: float = 1.0
 ) -> SurgeryRecord:
-    """Apply closed-form low-rank projection edits severing every selected
-    component (rank k per matrix, where k = the erased subspace dimension).
-
-    ``strength`` scales the projection: 1.0 fully erases the subspace,
-    fractional values attenuate it (used by calibrated surgery)."""
+    """Apply closed-form low-rank projection edits severing every selected component."""
     v = circuit.direction.basis  # [k, d]
     rank = circuit.direction.num_directions
     record = SurgeryRecord()
@@ -92,46 +113,36 @@ def perform_surgery(
     edited_attn_layers: set[int] = set()
 
     for component in circuit.selected:
-        layer = lm.text_layers[component.layer]
+        view = lm.layers[component.layer]
         if component.kind == "attn_head":
             cols = slice(component.head * dh, (component.head + 1) * dh)
-            project_out_of_columns_(layer.self_attn.out_proj.weight, v, cols, strength)
+            _project_attn_head_(view.attn_weight, v, cols, view.layout, strength)
             record.log(
-                f"text_model.encoder.layers.{component.layer}.self_attn.out_proj.weight"
-                f"[:, {cols.start}:{cols.stop}]",
+                f"{view.attn_path}.weight[:, {cols.start}:{cols.stop}]"
+                if view.layout == "linear"
+                else f"{view.attn_path}.weight[{cols.start}:{cols.stop}, :]",
                 "output-space projection (per-head)",
                 rank=rank,
             )
             if config.edit_bias_terms and component.layer not in edited_attn_layers:
-                project_vector_(layer.self_attn.out_proj.bias, v, strength)
-                record.log(
-                    f"text_model.encoder.layers.{component.layer}.self_attn.out_proj.bias",
-                    "bias projection",
-                    rank=rank,
-                )
+                if view.attn_bias is not None:
+                    project_vector_(view.attn_bias, v, strength)
+                    record.log(f"{view.attn_path}.bias", "bias projection", rank=rank)
                 edited_attn_layers.add(component.layer)
         elif component.kind == "mlp":
-            project_out_of_output_(layer.mlp.fc2.weight, v, strength)
+            _project_mlp_out_(view.mlp_weight, v, view.layout, strength)
             record.log(
-                f"text_model.encoder.layers.{component.layer}.mlp.fc2.weight",
+                f"{view.mlp_path}.weight",
                 "output-space projection",
                 rank=rank,
             )
-            if config.edit_bias_terms:
-                project_vector_(layer.mlp.fc2.bias, v, strength)
-                record.log(
-                    f"text_model.encoder.layers.{component.layer}.mlp.fc2.bias",
-                    "bias projection",
-                    rank=rank,
-                )
+            if config.edit_bias_terms and view.mlp_bias is not None:
+                project_vector_(view.mlp_bias, v, strength)
+                record.log(f"{view.mlp_path}.bias", "bias projection", rank=rank)
         else:  # pragma: no cover - defensive
             raise ValueError(f"Unknown component kind: {component.kind}")
 
-    if config.harden_projection:
-        # text_projection reads the residual stream *after* final_layer_norm.
-        # LN centers the stream and rescales coordinates by its gain, so a
-        # perturbation alpha*v pre-LN surfaces post-LN (to first order) along
-        # gamma (x) (v - mean(v)); harden against the transported subspace.
+    if config.harden_projection and lm.has_readout_hardening():
         gamma = lm.model.text_model.final_layer_norm.weight
         v_post = gamma * (v - v.mean(dim=-1, keepdim=True))
         project_out_of_input_(lm.model.text_projection.weight, v_post, strength)
