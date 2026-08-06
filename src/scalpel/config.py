@@ -22,6 +22,13 @@ def _env_mapping(name: str) -> dict[str, str]:
     return mapping
 
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 @dataclass
 class Settings:
     """Runtime settings for the Scalpel API service."""
@@ -42,6 +49,32 @@ class Settings:
     )
     default_plan: str = field(
         default_factory=lambda: os.environ.get("SCALPEL_DEFAULT_PLAN", "enterprise")
+    )
+    # Ops / alerts
+    alert_weat_threshold: float = field(
+        default_factory=lambda: float(os.environ.get("SCALPEL_ALERT_WEAT_THRESHOLD", "0.5"))
+    )
+    alert_overcorrection_threshold: float = field(
+        default_factory=lambda: float(
+            os.environ.get("SCALPEL_ALERT_OVERCORRECTION_THRESHOLD", "0.3")
+        )
+    )
+    # Jobs stuck queued/running longer than this are failed so the pool unblocks.
+    job_queued_timeout_seconds: int = field(
+        default_factory=lambda: int(os.environ.get("SCALPEL_JOB_QUEUED_TIMEOUT_S", "900"))
+    )
+    job_running_timeout_seconds: int = field(
+        default_factory=lambda: int(os.environ.get("SCALPEL_JOB_RUNNING_TIMEOUT_S", "3600"))
+    )
+    # Deployment
+    cors_origins: list[str] = field(
+        default_factory=lambda: _env_list("SCALPEL_CORS_ORIGINS")
+    )
+    webhook_secret: str = field(
+        default_factory=lambda: os.environ.get("SCALPEL_WEBHOOK_SECRET", "").strip()
+    )
+    require_api_keys: bool = field(
+        default_factory=lambda: _env_bool("SCALPEL_REQUIRE_API_KEYS", True)
     )
 
 

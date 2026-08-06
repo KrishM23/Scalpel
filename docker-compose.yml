@@ -8,13 +8,34 @@ services:
       SCALPEL_TENANT_PLANS: ${SCALPEL_TENANT_PLANS:-}
       SCALPEL_DEFAULT_PLAN: ${SCALPEL_DEFAULT_PLAN:-enterprise}
       SCALPEL_MAX_CONCURRENT_JOBS: ${SCALPEL_MAX_CONCURRENT_JOBS:-1}
+      SCALPEL_DEVICE: ${SCALPEL_DEVICE:-cpu}
+      SCALPEL_ARTIFACT_DIR: /data/artifacts
+      SCALPEL_DB_PATH: /data/scalpel.db
+      SCALPEL_OPEN_KEYS: ${SCALPEL_OPEN_KEYS:-0}
+      SCALPEL_REQUIRE_API_KEYS: ${SCALPEL_REQUIRE_API_KEYS:-1}
+      SCALPEL_CORS_ORIGINS: ${SCALPEL_CORS_ORIGINS:-}
+      SCALPEL_WEBHOOK_SECRET: ${SCALPEL_WEBHOOK_SECRET:-}
+      SCALPEL_ALERT_WEAT_THRESHOLD: ${SCALPEL_ALERT_WEAT_THRESHOLD:-0.5}
     volumes:
       - scalpel-data:/data
-      - hf-cache:/root/.cache/huggingface
+      - hf-cache:/home/scalpel/.cache/huggingface
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=4)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 25s
     deploy:
       resources:
         limits:
           memory: 4g
+    restart: unless-stopped
 
 volumes:
   scalpel-data:

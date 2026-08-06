@@ -101,11 +101,59 @@ def test_health_is_public(client):
     assert client.get("/health").json()["status"] == "ok"
 
 
-def test_web_console_served(client):
-    response = client.get("/")
-    assert response.status_code == 200
-    assert "text/html" in response.headers["content-type"]
-    assert "Scalpel" in response.text
+def test_marketing_and_console_pages(client):
+    landing = client.get("/")
+    assert landing.status_code == 200
+    assert "text/html" in landing.headers["content-type"]
+    assert "Cut bias out" in landing.text
+
+    console = client.get("/app")
+    assert console.status_code == 200
+    assert "Bias Operations" in console.text
+
+    login = client.get("/login")
+    assert login.status_code == 200
+    assert 'data-mode="login"' in login.text
+
+    signup = client.get("/signup")
+    assert signup.status_code == 200
+    assert 'data-mode="signup"' in signup.text
+
+
+def test_signup_login_issues_api_key(client):
+    payload = {
+        "email": "ops@acme.test",
+        "password": "securepass1",
+        "name": "Ops Lead",
+        "company": "Acme",
+    }
+    created = client.post("/v1/auth/signup", json=payload)
+    assert created.status_code == 200
+    body = created.json()
+    assert body["api_key"].startswith("sk_live_")
+    assert body["tenant"]
+    assert body["plan"] == "pro"
+
+    dup = client.post("/v1/auth/signup", json=payload)
+    assert dup.status_code == 400
+
+    bad = client.post(
+        "/v1/auth/login",
+        json={"email": payload["email"], "password": "wrong-password"},
+    )
+    assert bad.status_code == 401
+
+    logged_in = client.post(
+        "/v1/auth/login",
+        json={"email": payload["email"], "password": payload["password"]},
+    )
+    assert logged_in.status_code == 200
+    assert logged_in.json()["api_key"] == body["api_key"]
+
+    usage = client.get("/v1/usage", headers={"X-API-Key": body["api_key"]})
+    assert usage.status_code == 200
+    assert usage.json()["tenant"] == body["tenant"]
+    assert usage.json()["plan"] == "pro"
 
 
 def test_auth_required(client):
@@ -289,18 +337,64 @@ def test_usage_endpoint(tmp_path, monkeypatch):
 
 def test_webhook_fired_on_completion(tmp_path, monkeypatch):
     calls = []
-    monkeypatch.setattr(
-        jobs_module.httpx, "post",
-        lambda url, json, timeout: calls.append((url, json)),
-    )
-    with _make_client(tmp_path, monkeypatch) as client:
+
+    def capture(url, content=None, headers=None, json=None, timeout=None):
+        body = json if json is not None else __import__("json").loads(content)
+        calls.append((url, body, headers or {}))
+
+    monkeypatch.setattr(jobs_module.httpx, "post", capture)
+    with _make_client(
+        tmp_path, monkeypatch, webhook_secret="whsec_test"
+    ) as client:
         job = _submit(client, webhook_url="https://client.example/hook").json()
         _wait_for_terminal(client, job["id"])
     assert len(calls) == 1
-    url, payload = calls[0]
+    url, payload, headers = calls[0]
     assert url == "https://client.example/hook"
     assert payload["job_id"] == job["id"]
     assert payload["status"] == "succeeded"
+    assert headers.get("X-Scalpel-Signature", "").startswith("sha256=")
+
+
+def test_alerts_for_failed_and_hot_audit(tmp_path, monkeypatch):
+    with _make_client(tmp_path, monkeypatch) as client:
+        # Succeeded audit with high WEAT in FAKE_REPORT → bias_detected alert.
+        job = _submit(client, mode="audit").json()
+        _wait_for_terminal(client, job["id"])
+        alerts = client.get("/v1/alerts", headers=HEADERS).json()
+        assert any(a["kind"] == "bias_detected" and a["job_id"] == job["id"] for a in alerts)
+
+        # Force a failure via a bad model that passes probe stub… use monkeypatch on runner.
+        import scalpel.api.app as app_mod
+        from scalpel.models.registry import ModelProbe
+
+        monkeypatch.setattr(
+            app_mod,
+            "probe_model",
+            lambda model_id, trust_remote_code=True: ModelProbe(
+                model_id=model_id, family="clip", model_type="clip",
+                architecture_key="clip", description="stub",
+            ),
+        )
+
+        def boom(*_a, **_k):
+            raise RuntimeError("disk full")
+
+        monkeypatch.setattr(jobs_module, "run_debias_pipeline", boom)
+        failed = _submit(client, mode="audit").json()
+        final = _wait_for_terminal(client, failed["id"])
+        assert final["status"] == "failed"
+        alerts = client.get("/v1/alerts", headers=HEADERS).json()
+        assert any(a["kind"] == "job_failed" and a["job_id"] == failed["id"] for a in alerts)
+
+
+def test_ready_and_health(client):
+    assert client.get("/health").json()["status"] == "ok"
+    ready = client.get("/ready")
+    assert ready.status_code == 200
+    assert ready.json()["status"] == "ready"
+    assert "X-Request-ID" in ready.headers
+    assert ready.headers["X-Content-Type-Options"] == "nosniff"
 
 
 def test_rejects_unknown_model_and_bias(client, monkeypatch):
@@ -386,8 +480,26 @@ def test_incomplete_jobs_without_payload_fail_on_recover(tmp_path, monkeypatch):
     assert runner.recover() == 0
     row = store.get(job_id, "acme")
     assert row["status"] == "failed"
-    assert "restart" in row["error"].lower()
+    assert "restart" in row["error"].lower() or "timed out" in row["error"].lower()
     runner.shutdown()
+
+
+def test_stale_queued_job_is_reaped(tmp_path):
+    from datetime import datetime, timedelta, timezone
+
+    from scalpel.api.jobs import JobStore
+
+    store = JobStore(tmp_path / "db.sqlite")
+    job_id = store.create("acme", "openai/clip-vit-base-patch32", "gender_profession")
+    old = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+    with store._connect() as conn:
+        conn.execute(
+            "UPDATE jobs SET updated_at = ?, status = 'queued' WHERE id = ?",
+            (old, job_id),
+        )
+    failed = store.reap_stale(queued_timeout_s=60, running_timeout_s=3600)
+    assert job_id in failed
+    assert store.get(job_id, "acme")["status"] == "failed"
 
 
 def test_incomplete_jobs_with_payload_requeue(tmp_path, monkeypatch):

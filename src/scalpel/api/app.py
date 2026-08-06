@@ -1,39 +1,58 @@
 """Scalpel enterprise API (v1).
 
-Endpoints (all under /v1, authenticated via X-API-Key):
+Public pages:
+- GET  /                          marketing landing
+- GET  /login · /signup           workspace auth
+- GET  /app                       ops console
 
-- GET  /v1/models                 supported foundation models
+Endpoints (all under /v1, authenticated via X-API-Key or Bearer):
+
+- POST /v1/auth/signup            create workspace + API key
+- POST /v1/auth/login             exchange credentials for API key
+- GET  /v1/models                 featured models + supported families
+- GET  /v1/models/probe           classify any Hugging Face model id
 - GET  /v1/biases                 built-in bias benchmark catalog
 - POST /v1/edit-jobs              queue a debiasing surgery (202)
 - GET  /v1/edit-jobs              list this tenant's jobs
 - GET  /v1/edit-jobs/{id}         job status + summary metrics
 - GET  /v1/edit-jobs/{id}/report  full audit report (compliance artifact)
+- GET  /v1/alerts                 active workspace alerts
+- GET  /v1/usage                  plan + quota
 
-GET /health is unauthenticated for load balancers.
+GET /health and /ready are unauthenticated for load balancers.
 """
 
 from __future__ import annotations
 
 import json
+import logging
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, status
-from fastapi.responses import HTMLResponse
+from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 import scalpel
-from scalpel.api.auth import parse_key_entries, require_tenant
+from scalpel.api.alerts import collect_alerts
+from scalpel.api.auth import open_keys_enabled, parse_key_entries, require_tenant
 from scalpel.api.jobs import JobRunner, JobStore
 from scalpel.api.plans import plan_for_tenant
 from scalpel.api.schemas import (
+    AlertEntry,
+    AuthResponse,
     BiasCatalogEntry,
     EditJobDetail,
     EditJobRequest,
     EditJobSummary,
+    LoginRequest,
     ModelCatalogResponse,
     ModelProbeResponse,
+    SignupRequest,
     UsageResponse,
 )
+from scalpel.api.users import UserAccount, UserStore
 from scalpel.biases.catalog import bias_catalog, spec_from_payload
 from scalpel.config import Settings, get_settings
 from scalpel.models.adapters import supported_families
@@ -44,6 +63,18 @@ from scalpel.models.registry import (
 )
 from scalpel.reporting import render_report_html
 
+log = logging.getLogger("scalpel.api")
+
+_STATIC = Path(__file__).parent / "static"
+
+
+def _html_page(name: str, *, replacements: dict[str, str] | None = None) -> HTMLResponse:
+    html = (_STATIC / name).read_text()
+    html = html.replace("__SCALPEL_VERSION__", scalpel.__version__)
+    for key, value in (replacements or {}).items():
+        html = html.replace(key, value)
+    return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
+
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
@@ -51,13 +82,34 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.settings = settings
+        settings.artifact_dir.mkdir(parents=True, exist_ok=True)
+        settings.database_path.parent.mkdir(parents=True, exist_ok=True)
+        app.state.user_store = UserStore(settings.database_path)
         app.state.api_keys = parse_key_entries(settings.api_keys)
+        app.state.api_keys.update(
+            parse_key_entries(app.state.user_store.list_api_key_entries())
+        )
+        app.state.tenant_plans = {
+            **settings.tenant_plans,
+            **app.state.user_store.list_tenant_plans(),
+        }
+        if settings.require_api_keys and not app.state.api_keys and not open_keys_enabled():
+            log.error(
+                "No SCALPEL_API_KEYS configured and SCALPEL_OPEN_KEYS is off. "
+                "Set API keys or allow signup before accepting production traffic."
+            )
         app.state.store = JobStore(settings.database_path)
         app.state.runner = JobRunner(app.state.store, settings)
         # Resume (or cleanly fail) jobs left incomplete by a prior process.
-        app.state.runner.recover()
+        recovered = app.state.runner.recover()
+        if recovered:
+            log.info("Requeued %d incomplete job(s) after restart", recovered)
         yield
         app.state.runner.shutdown()
+
+    def _register_account(account: UserAccount) -> None:
+        app.state.api_keys[account.api_key] = account.tenant
+        app.state.tenant_plans[account.tenant] = account.plan
 
     app = FastAPI(
         title="Scalpel — Model Editing & Bias Mitigation API",
@@ -66,24 +118,121 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
 
+    if settings.cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.cors_origins,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+
+    @app.middleware("http")
+    async def security_and_request_id(request: Request, call_next):
+        request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex
+        request.state.request_id = request_id
+        response: Response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["X-Frame-Options"] = "DENY"
+        # Console is same-origin; APIs are key-authenticated.
+        if request.url.path.startswith("/v1"):
+            response.headers["Cache-Control"] = "no-store"
+        return response
+
     @app.get("/health", tags=["ops"])
     def health() -> dict:
-        return {"status": "ok", "version": scalpel.__version__}
+        return {
+            "status": "ok",
+            "version": scalpel.__version__,
+            "open_keys": open_keys_enabled(),
+        }
+
+    @app.get("/ready", tags=["ops"])
+    def ready() -> JSONResponse:
+        """Readiness: DB reachable and auth configured (unless open-keys/dev)."""
+        checks: dict[str, str] = {}
+        ok = True
+        try:
+            store: JobStore = app.state.store
+            with store._connect() as conn:
+                conn.execute("SELECT 1").fetchone()
+            checks["database"] = "ok"
+        except Exception as exc:  # noqa: BLE001
+            checks["database"] = f"error: {exc}"
+            ok = False
+        keys_ok = (
+            bool(getattr(app.state, "api_keys", None))
+            or open_keys_enabled()
+            or getattr(app.state, "user_store", None) is not None
+        )
+        if settings.require_api_keys and not keys_ok:
+            checks["auth"] = "no_api_keys"
+            ok = False
+        else:
+            checks["auth"] = "ok"
+        body = {"status": "ready" if ok else "not_ready", "checks": checks,
+                "version": scalpel.__version__}
+        return JSONResponse(body, status_code=200 if ok else 503)
 
     @app.get("/", include_in_schema=False)
+    def landing() -> HTMLResponse:
+        return _html_page("landing.html")
+
+    @app.get("/app", include_in_schema=False)
     def console() -> HTMLResponse:
-        """Web console. The page itself is public; every API call it makes
-        requires the tenant's API key."""
-        page = Path(__file__).parent / "static" / "index.html"
-        return HTMLResponse(page.read_text())
+        """Ops console. Public HTML; every API call requires a tenant API key."""
+        return _html_page("index.html")
+
+    @app.get("/login", include_in_schema=False)
+    def login_page() -> HTMLResponse:
+        return _html_page(
+            "auth.html",
+            replacements={"__AUTH_MODE__": "login", "__AUTH_TITLE__": "Log in"},
+        )
+
+    @app.get("/signup", include_in_schema=False)
+    def signup_page() -> HTMLResponse:
+        return _html_page(
+            "auth.html",
+            replacements={"__AUTH_MODE__": "signup", "__AUTH_TITLE__": "Sign up"},
+        )
+
+    @app.post("/v1/auth/signup", response_model=AuthResponse, tags=["auth"])
+    def signup(body: SignupRequest) -> AuthResponse:
+        store: UserStore = app.state.user_store
+        try:
+            account = store.create(
+                email=body.email,
+                password=body.password,
+                name=body.name,
+                company=body.company,
+                plan="pro",
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+            ) from exc
+        _register_account(account)
+        return AuthResponse(**account.public_dict())
+
+    @app.post("/v1/auth/login", response_model=AuthResponse, tags=["auth"])
+    def login(body: LoginRequest) -> AuthResponse:
+        store: UserStore = app.state.user_store
+        account = store.authenticate(body.email, body.password)
+        if account is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password",
+            )
+        # Ensure runtime key map is current (e.g. after restart already loaded).
+        _register_account(account)
+        return AuthResponse(**account.public_dict())
 
     @app.get("/v1/models", response_model=ModelCatalogResponse, tags=["catalog"])
     def list_models(_tenant: str = Depends(require_tenant)) -> ModelCatalogResponse:
-        """Featured models plus the architecture families any HF id can use.
-
-        Scalpel is not limited to the featured list — POST /v1/edit-jobs with
-        any Hugging Face model id whose ``model_type`` is in a supported family.
-        """
+        """Featured models plus the architecture families any HF id can use."""
         return ModelCatalogResponse(
             accepts_any_huggingface_id=True,
             families=supported_families(),
@@ -131,6 +280,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             for spec in bias_catalog().values()
         ]
 
+    @app.get("/v1/alerts", response_model=list[AlertEntry], tags=["ops"])
+    def list_alerts(tenant: str = Depends(require_tenant)) -> list[AlertEntry]:
+        """Active alerts for this tenant (failures, unremediated / residual bias)."""
+        app.state.runner.reap_stale()
+        jobs = app.state.store.list_for_tenant(tenant)
+        alerts = collect_alerts(
+            jobs,
+            weat_threshold=settings.alert_weat_threshold,
+            overcorrection_threshold=settings.alert_overcorrection_threshold,
+        )
+        return [AlertEntry(**a.to_dict()) for a in alerts]
+
     @app.post(
         "/v1/edit-jobs",
         response_model=EditJobSummary,
@@ -164,7 +325,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             ) from exc
 
         # Commercial plan enforcement.
-        plan = plan_for_tenant(tenant, settings.tenant_plans, settings.default_plan)
+        plan = plan_for_tenant(tenant, app.state.tenant_plans, settings.default_plan)
         if request.mode == "edit" and not plan.allows_edit:
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
@@ -195,7 +356,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/v1/usage", response_model=UsageResponse, tags=["billing"])
     def usage(tenant: str = Depends(require_tenant)) -> UsageResponse:
-        plan = plan_for_tenant(tenant, settings.tenant_plans, settings.default_plan)
+        plan = plan_for_tenant(tenant, app.state.tenant_plans, settings.default_plan)
         return UsageResponse(
             tenant=tenant,
             plan=plan.name,
@@ -206,6 +367,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/v1/edit-jobs", response_model=list[EditJobSummary], tags=["editing"])
     def list_edit_jobs(tenant: str = Depends(require_tenant)) -> list[EditJobSummary]:
+        # Opportunistic cleanup so a wedged queue cannot linger forever.
+        app.state.runner.reap_stale()
         return [_summary(row) for row in app.state.store.list_for_tenant(tenant)]
 
     @app.get("/v1/edit-jobs/{job_id}", response_model=EditJobDetail, tags=["editing"])

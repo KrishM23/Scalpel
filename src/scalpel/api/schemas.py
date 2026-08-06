@@ -38,7 +38,10 @@ class EditJobRequest(BaseModel):
     bias: str | CustomBiasSpecPayload = "gender_profession"
     mode: Literal["edit", "audit"] = "edit"
     options: SurgeryOptions = SurgeryOptions()
-    save_artifact: bool = True
+    save_artifact: bool = Field(
+        default=False,
+        description="Persist edited weights to disk (slower). Default off for snappy API jobs.",
+    )
     webhook_url: str | None = Field(
         default=None, description="POSTed a completion payload when the job finishes"
     )
@@ -99,3 +102,38 @@ class ModelProbeResponse(BaseModel):
     architecture_key: str
     description: str
     supported: bool = True
+
+
+class AlertEntry(BaseModel):
+    id: str
+    job_id: str
+    kind: str
+    severity: str
+    title: str
+    detail: str
+    bias_name: str
+    mode: str
+    created_at: str
+
+
+class SignupRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=8, max_length=128)
+    name: str = Field(default="", max_length=120)
+    company: str = Field(default="", max_length=120)
+
+
+class LoginRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=1, max_length=128)
+
+
+class AuthResponse(BaseModel):
+    id: str
+    email: str
+    name: str
+    company: str
+    tenant: str
+    api_key: str
+    plan: str
+    created_at: str

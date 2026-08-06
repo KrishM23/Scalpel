@@ -16,7 +16,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-import torch.nn as nn
+from torch import nn
 from transformers import PreTrainedTokenizerBase
 
 from scalpel.biases.catalog import BiasSpec, get_bias_spec

@@ -103,9 +103,10 @@ downloads, plan usage). OpenAPI docs at `/docs`.
 | `GET /v1/edit-jobs/{id}/report` | full JSON audit report |
 | `GET /v1/edit-jobs/{id}/report.html` | standalone compliance report |
 | `GET /v1/edit-jobs/{id}/artifact` | edited weights (zip) |
+| `GET /v1/alerts` | active alerts (failures, unremediated / residual bias) |
 | `GET /v1/usage` | plan, quota, jobs this month |
-| `GET /v1/models` · `/v1/biases` | catalogs |
-| `GET /health` | unauthenticated liveness |
+| `GET /v1/models` · `/v1/biases` | catalogs (any compatible HF id accepted) |
+| `GET /health` · `/ready` | liveness / readiness (load balancers) |
 
 Custom bias benchmarks (your own contrastive pairs, probes, retention
 prompts) can be submitted inline in the job payload.

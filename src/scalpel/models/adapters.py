@@ -8,11 +8,12 @@ of the platform stays architecture-agnostic.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Literal
+from typing import Any, Literal
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 WeightLayout = Literal["linear", "conv1d"]
 Family = Literal["clip", "causal_lm", "text_encoder"]

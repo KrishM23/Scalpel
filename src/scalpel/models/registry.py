@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import torch
-import torch.nn as nn
+from torch import nn
 from transformers import (
     AutoConfig,
     AutoModel,
@@ -252,7 +252,7 @@ def probe_model(model_id: str, trust_remote_code: bool = True) -> ModelProbe:
 
     try:
         config = AutoConfig.from_pretrained(model_id, trust_remote_code=trust_remote_code)
-    except Exception as exc:  # noqa: BLE001 - surface HF errors to API
+    except Exception as exc:
         raise UnsupportedArchitectureError(
             f"Could not load Hugging Face config for '{model_id}': {exc}"
         ) from exc

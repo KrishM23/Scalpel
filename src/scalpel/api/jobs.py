@@ -8,13 +8,15 @@ the original request payload was stored.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import logging
 import shutil
 import sqlite3
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import httpx
@@ -132,6 +134,40 @@ class JobStore:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def reap_stale(
+        self, *, queued_timeout_s: int, running_timeout_s: int
+    ) -> list[str]:
+        """Fail jobs that have been queued/running longer than the allowed window."""
+        now = datetime.now(timezone.utc)
+        failed_ids: list[str] = []
+        for row in self.list_incomplete():
+            try:
+                updated = datetime.fromisoformat(row["updated_at"].replace("Z", "+00:00"))
+            except (TypeError, ValueError):
+                updated = now - timedelta(days=1)
+            if updated.tzinfo is None:
+                updated = updated.replace(tzinfo=timezone.utc)
+            age = (now - updated).total_seconds()
+            status = row["status"]
+            if status == "queued" and age > queued_timeout_s:
+                msg = (
+                    f"Timed out after {int(age)}s in queue "
+                    f"(limit {queued_timeout_s}s). Resubmit or raise "
+                    "SCALPEL_MAX_CONCURRENT_JOBS / use a smaller model."
+                )
+            elif status == "running" and age > running_timeout_s:
+                msg = (
+                    f"Timed out after {int(age)}s running "
+                    f"(limit {running_timeout_s}s). Resubmit with "
+                    "save_artifact=false or a smaller model."
+                )
+            else:
+                continue
+            self.update(row["id"], status="failed", error=msg)
+            failed_ids.append(row["id"])
+            log.warning("Reaped stale job %s (%s)", row["id"], status)
+        return failed_ids
+
 
 class JobRunner:
     """Executes edit jobs on a bounded worker pool."""
@@ -139,19 +175,30 @@ class JobRunner:
     def __init__(self, store: JobStore, settings: Settings):
         self.store = store
         self.settings = settings
+        self._inflight: set[str] = set()
         self.executor = ThreadPoolExecutor(
             max_workers=settings.max_concurrent_jobs, thread_name_prefix="scalpel-job"
         )
 
     def submit(self, job_id: str, tenant: str, request: EditJobRequest) -> None:
-        self.executor.submit(self._run, job_id, tenant, request)
+        if job_id in self._inflight:
+            return
+        self._inflight.add(job_id)
+        self.executor.submit(self._run_guarded, job_id, tenant, request)
+
+    def reap_stale(self) -> list[str]:
+        return self.store.reap_stale(
+            queued_timeout_s=self.settings.job_queued_timeout_seconds,
+            running_timeout_s=self.settings.job_running_timeout_seconds,
+        )
 
     def recover(self) -> int:
         """Requeue incomplete jobs after a process restart.
 
-        Jobs without a persisted request payload cannot be resumed and are
-        marked failed so they do not permanently starve the worker pool.
+        Stale jobs are failed first. Jobs without a persisted request payload
+        cannot be resumed and are marked failed so they do not starve the pool.
         """
+        self.reap_stale()
         recovered = 0
         for row in self.store.list_incomplete():
             job_id = row["id"]
@@ -166,7 +213,7 @@ class JobRunner:
                 continue
             try:
                 request = EditJobRequest.model_validate_json(raw)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001 - corrupt payload boundary
                 self.store.update(
                     job_id,
                     status="failed",
@@ -181,6 +228,12 @@ class JobRunner:
 
     def shutdown(self) -> None:
         self.executor.shutdown(wait=False, cancel_futures=True)
+
+    def _run_guarded(self, job_id: str, tenant: str, request: EditJobRequest) -> None:
+        try:
+            self._run(job_id, tenant, request)
+        finally:
+            self._inflight.discard(job_id)
 
     def _run(self, job_id: str, tenant: str, request: EditJobRequest) -> None:
         self.store.update(job_id, status="running", error=None)
@@ -222,7 +275,7 @@ class JobRunner:
                 artifact_dir=str(result.artifact_path) if result.artifact_path else None,
             )
             self._notify(request, job_id, "succeeded", result.report)
-        except Exception as exc:  # noqa: BLE001 - job boundary
+        except Exception as exc:
             error = f"{type(exc).__name__}: {exc}"
             log.exception("Job %s failed", job_id)
             self.store.update(job_id, status="failed", error=error)
@@ -236,9 +289,8 @@ class JobRunner:
         if model_dir.is_dir():
             shutil.make_archive(str(artifact_path / "model"), "zip", model_dir)
 
-    @staticmethod
-    def _notify(request: EditJobRequest, job_id: str, status: str, report: dict) -> None:
-        """Fire-and-forget webhook on job completion."""
+    def _notify(self, request: EditJobRequest, job_id: str, status: str, report: dict) -> None:
+        """Fire-and-forget webhook on job completion (optionally HMAC-signed)."""
         if not request.webhook_url:
             return
         payload = {
@@ -249,7 +301,15 @@ class JobRunner:
             "metrics": report.get("metrics"),
             "error": report.get("error"),
         }
+        body = json.dumps(payload, separators=(",", ":"), default=str).encode("utf-8")
+        headers = {"Content-Type": "application/json"}
+        secret = self.settings.webhook_secret
+        if secret:
+            digest = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
+            headers["X-Scalpel-Signature"] = f"sha256={digest}"
         try:
-            httpx.post(request.webhook_url, json=payload, timeout=10.0)
+            httpx.post(
+                request.webhook_url, content=body, headers=headers, timeout=10.0
+            )
         except httpx.HTTPError:
             pass  # delivery is best-effort; the job result is still queryable

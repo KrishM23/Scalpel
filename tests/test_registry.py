@@ -10,7 +10,12 @@ from transformers import GPT2Config, GPT2LMHeadModel
 
 from scalpel.editing.surgeon import SurgeryConfig
 from scalpel.models.adapters import get_architecture_spec, normalize_model_type, supported_families
-from scalpel.models.registry import LoadedModel, UnsupportedArchitectureError, load_model, probe_model
+from scalpel.models.registry import (
+    LoadedModel,
+    UnsupportedArchitectureError,
+    load_model,
+    probe_model,
+)
 from scalpel.pipelines.debias import run_debias_pipeline
 
 
@@ -109,7 +114,7 @@ def test_probe_rejects_unknown_architecture(monkeypatch):
 
     class _Cfg:
         model_type = "totally_unsupported_arch_xyz"
-        architectures = []
+        architectures: tuple = ()
 
     monkeypatch.setattr(
         AutoConfig, "from_pretrained", classmethod(lambda cls, *a, **k: _Cfg())

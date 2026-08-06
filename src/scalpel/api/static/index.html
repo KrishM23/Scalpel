@@ -132,6 +132,21 @@
   .alertbar .tri { color: var(--cloud); }
   .alertbar b { font-family: var(--mono); font-weight: 600; }
   .alertbar .spacer { flex: 1; }
+  .alertbar.critical { background: #3a1a1a; border-color: #6b3030; }
+  .alertlist { margin-top: 12px; display: none; flex-direction: column; gap: 8px; }
+  .alertlist.open { display: flex; }
+  .alertitem {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 9px;
+    padding: 12px 14px; display: grid; grid-template-columns: 1fr auto; gap: 8px 16px;
+    cursor: pointer; transition: border-color .15s;
+  }
+  .alertitem:hover { border-color: var(--field); }
+  .alertitem .akind { font: 10px var(--mono); letter-spacing: .1em; text-transform: uppercase;
+                      color: var(--cloud); }
+  .alertitem .akind.critical { color: #e8a0a0; }
+  .alertitem .atitle { font-size: 13px; font-weight: 600; margin-top: 2px; }
+  .alertitem .adetail { font-size: 12px; color: var(--muted); margin-top: 4px; grid-column: 1 / -1; }
+  .alertitem .aactions { display: flex; gap: 8px; align-items: start; }
 
   .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 18px; }
   .card {
@@ -205,22 +220,119 @@
   .hero p { color: var(--muted2); font-size: 16px; margin-top: 18px; line-height: 1.65; }
   .hero .ctas { display: flex; gap: 12px; justify-content: center; margin-top: 28px; }
 
-  .circuitstrip { display: flex; gap: 9px; justify-content: center; margin: 40px 0 6px;
-                  position: relative; }
-  .cnode { width: 13px; height: 13px; border-radius: 4px; background: var(--panel2);
-           border: 1px solid var(--border2); position: relative; }
-  .cnode.biased { background: var(--charcoal); border-color: var(--field); }
-  .cnode.biased::after {
-    content: ""; position: absolute; inset: 0; border-radius: 4px;
-    background: var(--cloud); border: 1px solid var(--cloud);
-    opacity: 0; animation: sever 5s ease infinite;
+  /* ---------------- live surgery demo ---------------- */
+  .livedemo {
+    margin: 36px auto 0; max-width: 920px; text-align: left;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    overflow: hidden; position: relative;
   }
-  .cnode:nth-child(3).biased::after { animation-delay: .4s }
-  .cnode:nth-child(7).biased::after { animation-delay: .9s }
-  .cnode:nth-child(11).biased::after { animation-delay: 1.4s }
-  .cnode:nth-child(14).biased::after { animation-delay: 1.9s }
-  .striplabel { text-align: center; font: 10px var(--mono); color: var(--muted);
-                letter-spacing: .14em; text-transform: uppercase; }
+  .livedemo::before {
+    content: ""; position: absolute; inset: 0 0 auto 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--field), var(--cloud), transparent);
+    opacity: .55;
+  }
+  .ld-head {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 14px 18px; border-bottom: 1px solid var(--border); background: var(--bg2);
+  }
+  .ld-live {
+    display: inline-flex; align-items: center; gap: 7px;
+    font: 700 10px var(--mono); letter-spacing: .16em; color: var(--cloud);
+    background: var(--forest); border: 1px solid var(--field); border-radius: 5px;
+    padding: 4px 8px;
+  }
+  .ld-pulse {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--cloud);
+    animation: pulse 1.4s ease infinite;
+  }
+  .ld-model { font: 12px var(--mono); color: var(--muted2); flex: 1; min-width: 180px; }
+  .ld-body { display: grid; grid-template-columns: 220px 1fr; min-height: 320px; }
+  .ld-rail {
+    border-right: 1px solid var(--border); padding: 18px 16px; background: var(--bg2);
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .ld-phase {
+    display: grid; grid-template-columns: 22px 1fr; gap: 10px; align-items: start;
+    padding: 10px 8px; border-radius: 8px; color: var(--muted); transition: all .2s ease;
+    cursor: pointer; border: 1px solid transparent; width: 100%; text-align: left;
+    background: transparent; font: inherit;
+  }
+  .ld-phase:hover { background: var(--panel2); border-color: var(--border); color: var(--cloud); }
+  .ld-phase:focus-visible { outline: 1px solid var(--field); outline-offset: 2px; }
+  .ld-phase .dot {
+    width: 10px; height: 10px; margin-top: 3px; border-radius: 50%;
+    background: var(--charcoal); border: 1px solid var(--border2);
+  }
+  .ld-phase .label { font: 700 10px var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+  .ld-phase .hint { font-size: 12px; margin-top: 2px; line-height: 1.4; color: var(--muted); }
+  .ld-phase.active { background: var(--forest); color: var(--cloud); border-color: var(--field); }
+  .ld-phase.active .dot { background: var(--cloud); border-color: var(--cloud);
+                          box-shadow: 0 0 0 3px rgba(238,238,233,.12); }
+  .ld-phase.active .hint { color: var(--muted2); }
+  .ld-phase.done { color: var(--muted2); }
+  .ld-phase.done .dot { background: var(--field); border-color: var(--field); }
+  .ld-phase.done:hover { color: var(--cloud); }
+  .ld-main { padding: 18px 20px 16px; display: flex; flex-direction: column; gap: 14px; }
+  .ld-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .ld-metric {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px;
+  }
+  .ld-metric .k { font: 10px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .ld-metric .v { font-size: 22px; font-weight: 700; margin-top: 6px; font-variant-numeric: tabular-nums;
+                  letter-spacing: -.02em; min-height: 1.2em; }
+  .ld-metric .s { font-size: 11px; color: var(--muted); margin-top: 4px; min-height: 1.2em; }
+  .ld-metric .v.good { color: var(--cloud); }
+  .ld-board {
+    flex: 1; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px; display: grid; grid-template-rows: auto 1fr auto; gap: 12px; min-height: 200px;
+  }
+  .ld-board-title { display: flex; justify-content: space-between; align-items: baseline; }
+  .ld-board-title h4 { font-size: 13px; font-weight: 600; }
+  .ld-board-title span { font: 11px var(--mono); color: var(--muted); }
+  .ld-grid {
+    display: grid; grid-template-columns: repeat(12, 1fr); gap: 6px; align-content: start;
+  }
+  .ld-cell {
+    aspect-ratio: 1; border-radius: 4px; background: var(--panel2); border: 1px solid var(--border2);
+    transition: background .2s, border-color .2s, transform .2s, opacity .3s;
+  }
+  .ld-cell.scan { background: var(--charcoal); border-color: var(--field); }
+  .ld-cell.hot { background: var(--field); border-color: var(--cloud); transform: scale(1.08); }
+  .ld-cell.cut { background: var(--cloud); border-color: var(--cloud); opacity: .95; }
+  .ld-cell.cut.fade { opacity: .35; background: var(--forest); border-color: var(--field); transform: none; }
+  .ld-probes { display: grid; gap: 6px; }
+  .ld-probe { display: grid; grid-template-columns: 72px 1fr 44px; gap: 8px; align-items: center;
+              font: 10px var(--mono); color: var(--muted); }
+  .ld-probe .track { height: 7px; background: var(--panel2); border-radius: 4px; overflow: hidden; }
+  .ld-probe .fill { height: 100%; width: 0; border-radius: 4px; background: var(--field);
+                    transition: width .5s cubic-bezier(.2,.7,.3,1); }
+  .ld-probe .fill.neutral { background: var(--cloud); }
+  .ld-log {
+    font: 11px/1.55 var(--mono); color: var(--muted2); background: var(--bg);
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+    min-height: 52px; max-height: 72px; overflow: hidden;
+  }
+  .ld-log .line { opacity: 0; animation: fadeIn .35s ease forwards; }
+  .ld-log .line + .line { margin-top: 2px; }
+  .ld-progress { height: 3px; background: var(--border); }
+  .ld-progress > i { display: block; height: 100%; width: 0; background: var(--field);
+                     transition: width .4s ease; }
+  .ld-foot {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 12px 18px; border-top: 1px solid var(--border); background: var(--bg2);
+  }
+  .ld-foot .status { font: 12px var(--mono); color: var(--muted2); flex: 1; }
+  .ld-foot .status b { color: var(--cloud); }
+  @media (max-width: 820px) {
+    .ld-body { grid-template-columns: 1fr; }
+    .ld-rail { border-right: 0; border-bottom: 1px solid var(--border);
+               display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+    .ld-phase .hint { display: none; }
+    .ld-metrics { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ld-pulse, .ld-cell, .ld-probe .fill, .ld-progress > i { animation: none !important; transition: none !important; }
+  }
 
   .numstrip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;
               margin: 44px auto 0; max-width: 900px; }
@@ -368,13 +480,21 @@
   .kv .cell .v { font-size: 19px; font-weight: 700; margin-top: 5px;
                  font-variant-numeric: tabular-nums; }
   .kv .cell .s { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .leanbox {
+    margin: 14px 0 18px; padding: 12px 14px; border-radius: 9px;
+    background: var(--bg2); border: 1px solid var(--border); font-size: 13px; line-height: 1.55;
+    color: var(--muted2);
+  }
+  .leanbox b { color: var(--cloud); font-weight: 600; }
+  .leanbox .mono { font-family: var(--mono); font-size: 12px; }
+  .bar-row-meta { font-size: 10px; color: var(--muted); margin-top: 2px; }
   .drawer h3 { font-size: 11px; color: var(--muted); text-transform: uppercase;
                letter-spacing: .1em; margin: 22px 0 10px; }
   .chips { display: flex; flex-wrap: wrap; gap: 7px; }
   .chip { font: 11px var(--mono); color: var(--cloud); background: var(--forest);
           border: 1px solid var(--field); border-radius: 6px; padding: 3px 9px; }
-  .bars .row { display: grid; grid-template-columns: 130px 1fr 52px; gap: 10px;
-               align-items: center; margin-bottom: 7px; font-size: 12px; }
+  .bars .row { display: grid; grid-template-columns: 140px 1fr 52px; gap: 10px;
+               align-items: start; margin-bottom: 10px; font-size: 12px; }
   .bars .track { height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; }
   .bars .fill { height: 100%; background: var(--field); border-radius: 3px;
                 transition: width .6s cubic-bezier(.2,.7,.3,1); }
@@ -430,7 +550,9 @@
 <body>
 
 <aside>
-  <div class="brand"><span class="dot"></span><b>SCALPEL</b><span class="ver">v0.2</span></div>
+  <a class="brand" href="/" title="Marketing site" style="text-decoration:none;color:inherit">
+    <span class="dot"></span><b>SCALPEL</b><span class="ver">v__SCALPEL_VERSION__</span>
+  </a>
   <div class="tenantbox">
     <span class="name" id="tenantName">—</span>
     <span class="plan-pill" id="tenantPlan">offline</span>
@@ -439,8 +561,8 @@
 
   <div class="navsec">Monitor</div>
   <div class="nav">
-    <a data-view="overview" class="active" onclick="showView('overview')">Overview</a>
-    <a onclick="showView('overview'); $('search').value='found'; renderJobs()">Alerts
+    <a data-view="overview" class="active" id="navOverview" onclick="showAlerts(false)">Overview</a>
+    <a id="navAlerts" onclick="showAlerts(true)">Alerts
       <span class="badge" id="alertCount" hidden>0</span></a>
   </div>
 
@@ -457,7 +579,9 @@
 
   <div class="navsec">Platform</div>
   <div class="nav">
+    <a href="/" target="_blank">Landing</a>
     <a href="/docs" target="_blank">OpenAPI Docs</a>
+    <a href="/login">Account</a>
     <a onclick="openModal()">New surgery</a>
   </div>
 
@@ -490,11 +614,14 @@
         <div class="subtitle" id="subtitle">connect with your API key to load your workspace</div>
       </div>
 
-      <div class="alertbar fade-up" id="alertbar" hidden>
+      <div class="alertbar" id="alertbar" hidden>
         <span class="tri">!</span><span id="alertText"></span>
         <span class="spacer"></span>
-        <button class="btn ghost" onclick="openModal()">Remediate</button>
+        <button class="btn ghost" id="alertViewBtn" onclick="showAlerts(true)">View</button>
+        <button class="btn ghost" id="alertDismissBtn" onclick="dismissVisibleAlerts()">Dismiss</button>
+        <button class="btn" id="alertRemediateBtn" onclick="remediateTopAlert()">Remediate</button>
       </div>
+      <div class="alertlist" id="alertList"></div>
 
       <div class="cards">
         <div class="card fade-up"><div class="k">Surgeries Run</div>
@@ -509,11 +636,15 @@
 
       <div class="section fade-up" style="animation-delay: .25s">
         <div class="sechead"><h2>Job Health</h2><span class="count" id="jobCount"></span></div>
+        <p class="subtitle" style="margin:-4px 0 12px;font-size:12px">
+          Queued jobs stay listed until they finish. “Lean” means which group a concept is pulled
+          toward (e.g. <span class="mono">engineer</span> → male vs female) before/after surgery.
+        </p>
         <div class="tablewrap">
           <table>
             <thead><tr>
-              <th>Job</th><th>Benchmark</th><th>Status</th><th>WEAT</th>
-              <th>Gap Δ</th><th>Retention</th><th>Trend</th><th>Updated</th>
+              <th>Job</th><th>Benchmark</th><th>Status</th><th>Bias strength</th>
+              <th>Lean reduced</th><th>Capability kept</th><th>Per-concept lean</th><th>Updated</th>
             </tr></thead>
             <tbody id="jobs"><tr><td colspan="8" class="empty">No jobs yet — run your first surgery</td></tr></tbody>
           </table>
@@ -538,9 +669,58 @@
           <button class="btn big" onclick="openModal()">Run your first audit</button>
           <button class="btn big ghost" onclick="showView('developers')">View the API</button>
         </div>
-        <div class="circuitstrip fade-up" style="animation-delay:.3s" id="circuitstrip"></div>
-        <div class="striplabel fade-up" style="animation-delay:.34s">
-          model components · bias circuit highlighted &amp; severed in real time
+
+        <!-- Live surgery demo: auto-plays when this view opens -->
+        <div class="livedemo fade-up" style="animation-delay:.28s" id="liveDemo" aria-label="Live surgery demo">
+          <div class="ld-head">
+            <span class="ld-live"><span class="ld-pulse"></span>LIVE DEMO</span>
+            <span class="ld-model" id="ldModel">openai/clip-vit-base-patch32 · gender ↔ profession · click 01–04</span>
+            <button class="btn ghost" type="button" id="ldReplay" onclick="restartLiveDemo()">Replay all</button>
+          </div>
+          <div class="ld-body">
+            <div class="ld-rail" id="ldRail" role="tablist" aria-label="Surgery phases">
+              <button type="button" class="ld-phase" role="tab" data-phase="measure" onclick="jumpLiveDemo('measure')">
+                <span class="dot"></span>
+                <div><div class="label">01 Measure</div><div class="hint">WEAT on contrastive prompts</div></div>
+              </button>
+              <button type="button" class="ld-phase" role="tab" data-phase="locate" onclick="jumpLiveDemo('locate')">
+                <span class="dot"></span>
+                <div><div class="label">02 Locate</div><div class="hint">Attribute heads &amp; MLPs</div></div>
+              </button>
+              <button type="button" class="ld-phase" role="tab" data-phase="cut" onclick="jumpLiveDemo('cut')">
+                <span class="dot"></span>
+                <div><div class="label">03 Cut</div><div class="hint">Closed-form weight edits</div></div>
+              </button>
+              <button type="button" class="ld-phase" role="tab" data-phase="prove" onclick="jumpLiveDemo('prove')">
+                <span class="dot"></span>
+                <div><div class="label">04 Prove</div><div class="hint">Re-measure + retention</div></div>
+              </button>
+            </div>
+            <div class="ld-main">
+              <div class="ld-metrics">
+                <div class="ld-metric"><div class="k">WEAT effect size</div>
+                  <div class="v" id="ldWeat">—</div><div class="s" id="ldWeatSub">awaiting measurement</div></div>
+                <div class="ld-metric"><div class="k">Association gap</div>
+                  <div class="v" id="ldGap">—</div><div class="s" id="ldGapSub">mean |Δ cosine|</div></div>
+                <div class="ld-metric"><div class="k">Retention</div>
+                  <div class="v" id="ldRet">—</div><div class="s" id="ldRetSub">neutral prompt fidelity</div></div>
+              </div>
+              <div class="ld-board">
+                <div class="ld-board-title">
+                  <h4 id="ldBoardTitle">Model components</h4>
+                  <span id="ldBoardMeta">12 layers · attention + MLP</span>
+                </div>
+                <div class="ld-grid" id="ldGrid"></div>
+                <div class="ld-probes" id="ldProbes"></div>
+              </div>
+              <div class="ld-log" id="ldLog" aria-live="polite"></div>
+            </div>
+          </div>
+          <div class="ld-progress"><i id="ldBar"></i></div>
+          <div class="ld-foot">
+            <div class="status" id="ldStatus">Starting surgery…</div>
+            <button class="btn" type="button" onclick="openModal()">Run this on your model</button>
+          </div>
         </div>
       </div>
 
@@ -611,9 +791,9 @@
             <h3>Audit, document, ship</h3>
             <p>The pipeline re-measures everything post-surgery: bias metrics before and after,
             plus commercial-performance retention on neutral prompts (embedding fidelity and
-            ranking geometry). You get the edited weights as a drop-in artifact, a
-            machine-readable audit, and a printable compliance report listing every tensor
-            touched — the documentation trail regulators and enterprise procurement ask for.</p>
+            ranking geometry). You get the <em>edited model file</em> (the internal numbers —
+            “weights” — that make concepts lean less toward one group), a machine-readable audit,
+            and a printable compliance report — the trail regulators and procurement ask for.</p>
           </div>
           <div class="stepviz"><div class="viz-prove">
             <div class="row"><span>bias</span><div class="track"><div class="bias"></div></div><span>−86%</span></div>
@@ -688,7 +868,7 @@
             <li>All built-in benchmarks</li>
             <li>Bias circuit localization</li>
             <li>JSON + HTML audit reports</li>
-            <li class="no">Weight editing &amp; artifacts</li>
+            <li class="no">Edited model download</li>
             <li class="no">Custom benchmarks</li>
           </ul>
           <button class="btn ghost" onclick="openModal()">Run a free audit</button>
@@ -793,6 +973,7 @@ model = CLIPModel.from_pretrained(<span class="c-s">"./model"</span>)</pre>
               <tr><td>GET /v1/edit-jobs/{id}</td><td>Status + summary metrics</td></tr>
               <tr><td>GET /v1/edit-jobs/{id}/report</td><td>Full JSON audit report</td></tr>
               <tr><td>GET /v1/edit-jobs/{id}/report.html</td><td>Printable compliance report</td></tr>
+              <tr><td>GET /v1/alerts</td><td>Failures &amp; unremediated / residual bias</td></tr>
               <tr><td>GET /v1/edit-jobs/{id}/artifact</td><td>Edited weights (zip)</td></tr>
               <tr><td>GET /v1/usage</td><td>Plan, quota, jobs this month</td></tr>
               <tr><td>GET /v1/models · /v1/biases</td><td>Supported models &amp; benchmark catalog</td></tr>
@@ -811,10 +992,14 @@ model = CLIPModel.from_pretrained(<span class="c-s">"./model"</span>)</pre>
     <span class="x" onclick="closeDrawer()">✕</span>
   </header>
   <div class="body">
+    <div class="leanbox" id="dLean" hidden></div>
     <div class="kv" id="dCards"></div>
-    <h3>Severed circuit components</h3>
+    <h3>Where the bias lived (model parts we edited)</h3>
     <div class="chips" id="dChips"></div>
-    <h3>Per-probe association gaps</h3>
+    <h3>How each concept leans</h3>
+    <p class="subtitle" style="margin:-6px 0 10px;font-size:12px" id="dBarsHint">
+      Positive = closer to group A · Negative = closer to group B
+    </p>
     <div class="bars" id="dBars"></div>
     <div class="actions" id="dActions"></div>
   </div>
@@ -852,7 +1037,21 @@ model = CLIPModel.from_pretrained(<span class="c-s">"./model"</span>)</pre>
 const $ = (id) => document.getElementById(id);
 const DEMO = new URLSearchParams(location.search).has("demo");
 const reportCache = new Map();
-let selectedJob = null, jobsData = [], biasesCache = [];
+let selectedJob = null, jobsData = [], biasesCache = [], alertsData = [];
+let alertsOnly = false;
+const WEAT_ALERT = 0.5;
+const DISMISS_KEY = "scalpel_dismissed_alerts";
+function dismissedAlertIds() {
+  try { return new Set(JSON.parse(localStorage.getItem(DISMISS_KEY) || "[]")); }
+  catch (_) { return new Set(); }
+}
+function persistDismissed(ids) {
+  localStorage.setItem(DISMISS_KEY, JSON.stringify([...ids].slice(-200)));
+}
+function activeAlerts() {
+  const dismissed = dismissedAlertIds();
+  return alertsData.filter(a => !dismissed.has(a.id));
+}
 
 /* ---------------- views ---------------- */
 const VIEWS = ["overview", "how", "benchmarks", "pricing", "developers"];
@@ -863,10 +1062,38 @@ function showView(name) {
   VIEWS.forEach(v => $(`view-${v}`).classList.toggle("active", v === name));
   document.querySelectorAll(".nav a[data-view]").forEach(a =>
     a.classList.toggle("active", a.dataset.view === name));
+  // Leaving Alerts (or opening Overview) must show the full job list again —
+  // otherwise queued surgeries look like they "disappeared".
+  if (name === "overview") {
+    if (alertsOnly) {
+      alertsOnly = false;
+      $("alertList")?.classList.remove("open");
+    }
+    $("navOverview")?.classList.add("active");
+    $("navAlerts")?.classList.remove("active");
+  } else {
+    alertsOnly = false;
+    $("navAlerts")?.classList.remove("active");
+  }
   $("urlPill").textContent = `scalpel.app/${VIEW_PATHS[name]}`;
   $("main").scrollTop = 0;
   history.replaceState(null, "", `#${VIEW_PATHS[name]}`);
   requestAnimationFrame(observeReveals);
+  if (name === "how") startLiveDemo();
+  else if (typeof ldClearTimers === "function") { ldClearTimers(); LD.running = false; }
+}
+
+function showAlerts(on) {
+  alertsOnly = !!on;
+  showView("overview");
+  $("navOverview")?.classList.toggle("active", !alertsOnly);
+  $("navAlerts")?.classList.toggle("active", alertsOnly);
+  $("urlPill").textContent = alertsOnly ? "scalpel.app/alerts" : "scalpel.app/overview";
+  $("search").value = "";
+  $("alertList").classList.toggle("open", alertsOnly && alertsData.length > 0);
+  renderJobs();
+  renderAlerts();
+  if (alertsOnly) $("alertList").scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 const revealObserver = new IntersectionObserver(entries =>
   entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add("in");
@@ -1012,33 +1239,104 @@ async function getReport(job) {
 
 async function hydrateReports(jobs) {
   const pending = jobs.filter(j => j.status === "succeeded" && !reportCache.has(j.id));
-  if (!pending.length) return;
+  if (!pending.length) {
+    if (DEMO) { alertsData = deriveClientAlerts(jobsData); renderAlerts(); }
+    return;
+  }
   await Promise.all(pending.map(async (job) => {
     await getReport(job);
     // Re-render as each report lands so the table never stays blank.
-    renderStats(); renderJobs(); renderAlerts();
+    renderStats(); renderJobs();
   }));
+  if (DEMO) alertsData = deriveClientAlerts(jobsData);
+  else {
+    try { alertsData = await api("/v1/alerts"); } catch (_) { /* keep prior */ }
+  }
+  renderAlerts();
+  if (alertsOnly) renderJobs();
 }
 
 async function refresh() {
   if (!DEMO && !currentKey()) {
     $("jobs").innerHTML = `<tr><td colspan="8" class="empty">Enter an API key to load your jobs</td></tr>`;
+    alertsData = [];
+    renderAlerts();
     return;
   }
   try {
-    jobsData = DEMO ? DEMO_JOBS : await api("/v1/edit-jobs");
+    if (DEMO) {
+      jobsData = DEMO_JOBS;
+      // Prefill demo reports so alert pills resolve.
+      DEMO_JOBS.forEach(j => { if (!reportCache.has(j.id)) reportCache.set(j.id, demoReport(j)); });
+      alertsData = deriveClientAlerts(jobsData);
+    } else {
+      const [jobs, alerts] = await Promise.all([api("/v1/edit-jobs"), api("/v1/alerts")]);
+      // Merge: keep any optimistic local rows (queued) until the server lists them.
+      const byId = new Map(jobs.map(j => [j.id, j]));
+      for (const local of jobsData) {
+        if (!byId.has(local.id) && (local.status === "queued" || local.status === "running")) {
+          byId.set(local.id, local);
+        }
+      }
+      jobsData = [...byId.values()].sort((a, b) =>
+        String(b.created_at || b.updated_at).localeCompare(String(a.created_at || a.updated_at)));
+      alertsData = alerts;
+    }
     // Render the job list immediately — do NOT wait on report downloads.
     renderStats(); renderJobs(); renderAlerts();
     $("subtitle").textContent =
       `${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}` +
-      ` · ${jobsData.length} jobs · ${new Set(jobsData.map(j => j.bias_name)).size} benchmarks`;
+      ` · ${jobsData.length} jobs · ${alertsData.length} alert${alertsData.length === 1 ? "" : "s"}`;
     // Hydrate metrics in the background for succeeded jobs.
     hydrateReports(jobsData);
   } catch (err) {
-    $("jobs").innerHTML = `<tr><td colspan="8" class="empty">${err.message}</td></tr>`;
+    // Keep existing rows visible — a transient error must not wipe the queue.
     $("connDot").classList.remove("on");
     $("connText").textContent = err.message.slice(0, 48);
+    if (!jobsData.length) {
+      $("jobs").innerHTML = `<tr><td colspan="8" class="empty">${err.message}</td></tr>`;
+    } else {
+      toast(err.message);
+    }
   }
+}
+
+function deriveClientAlerts(jobs) {
+  // Mirror server rules: failures; unremediated audits; under-performing edits only.
+  const remediated = new Set(
+    jobs.filter(j => j.status === "succeeded" && j.mode === "edit").map(j => j.bias_name)
+  );
+  const out = [];
+  const seenAudit = new Set();
+  const newestFirst = [...jobs].sort((a, b) =>
+    String(b.updated_at).localeCompare(String(a.updated_at)));
+  for (const j of newestFirst) {
+    if (j.status === "failed") {
+      out.push({ id: j.id + ":job_failed", job_id: j.id, kind: "job_failed", severity: "critical",
+        title: "Surgery failed", detail: j.error || "failed", bias_name: j.bias_name, mode: j.mode,
+        created_at: j.updated_at });
+      continue;
+    }
+    const r = reportCache.get(j.id);
+    if (!r || j.status !== "succeeded") continue;
+    const before = r.metrics.bias_before?.weat_effect_size
+      ?? r.metrics.bias_reduction?.weat_effect_size?.before;
+    const after = r.metrics.bias_reduction?.weat_effect_size?.after;
+    const gapRed = r.metrics.bias_reduction?.mean_abs_association_gap?.reduction_pct;
+    if (j.mode === "audit" && Math.abs(before) >= WEAT_ALERT
+        && !remediated.has(j.bias_name) && !seenAudit.has(j.bias_name)) {
+      seenAudit.add(j.bias_name);
+      out.push({ id: j.id + ":bias_detected", job_id: j.id, kind: "bias_detected", severity: "warning",
+        title: "Bias detected (unremediated)", detail: `Audit WEAT ${before}`,
+        bias_name: j.bias_name, mode: j.mode, created_at: j.updated_at });
+    }
+    if (j.mode === "edit" && after != null && gapRed != null && gapRed < 40) {
+      out.push({ id: j.id + ":residual_bias", job_id: j.id, kind: "residual_bias", severity: "warning",
+        title: "Surgery under-performed", detail: `Gap reduction ${gapRed}%`,
+        bias_name: j.bias_name, mode: j.mode, created_at: j.updated_at });
+    }
+  }
+  return out;
 }
 
 /* ---------------- rendering: overview ---------------- */
@@ -1077,30 +1375,60 @@ function sparkline(values, color) {
   return `<svg class="spark" width="${w}" height="${h}"><polyline points="${pts}" stroke="${color}"/></svg>`;
 }
 
+function groupsForBias(biasName) {
+  const b = biasesCache.find(x => x.name === biasName);
+  if (b?.groups?.length >= 2) return b.groups;
+  if (biasName?.includes("gender")) return ["male", "female"];
+  if (biasName?.includes("age")) return ["young", "old"];
+  if (biasName?.includes("ethnicity")) return ["white", "Black"];
+  return ["group A", "group B"];
+}
+
+function leanPhrase(gap, groupA, groupB) {
+  if (gap == null || !Number.isFinite(gap)) return "neutral";
+  if (Math.abs(gap) < 0.0015) return "roughly neutral";
+  return gap > 0 ? `leans toward ${groupA}` : `leans toward ${groupB}`;
+}
+
 function statusPill(job, report) {
   if (job.status === "running") return `<span class="pill running">running</span>`;
   if (job.status === "queued") return `<span class="pill queued">queued</span>`;
   if (job.status === "failed") return `<span class="pill failed">failed</span>`;
   if (job.mode === "audit") {
     const weat = report ? Math.abs(report.metrics.bias_before.weat_effect_size) : 0;
-    return weat >= 0.5
+    return weat >= WEAT_ALERT
       ? `<span class="pill alerting">bias found</span>`
       : `<span class="pill audited">audited</span>`;
+  }
+  if (report?.metrics?.bias_reduction) {
+    const after = Math.abs(report.metrics.bias_reduction.weat_effect_size.after);
+    if (after >= WEAT_ALERT) return `<span class="pill alerting">residual bias</span>`;
   }
   return `<span class="pill debiased">debiased</span>`;
 }
 
+function alertJobIds() {
+  return new Set(activeAlerts().map(a => a.job_id));
+}
+
 function renderJobs() {
   const filter = $("search").value.toLowerCase();
+  const alertIds = alertJobIds();
   const rows = jobsData
+    .filter(j => !alertsOnly || alertIds.has(j.id))
     .filter(j => (j.id + j.bias_name + j.mode + j.status + (j.error || "")).toLowerCase().includes(filter))
     .map(job => {
       const r = reportCache.get(job.id);
+      const [gA, gB] = groupsForBias(job.bias_name);
       let weat = "—", gap = "—", ret = "—", trend = "";
       if (job.status === "failed") {
         weat = `<span class="dim" title="${(job.error || "").replace(/"/g, "&quot;")}">${(job.error || "failed").slice(0, 28)}</span>`;
-      } else if (job.status === "queued" || job.status === "running") {
-        weat = `<span class="dim">${job.status}…</span>`;
+      } else if (job.status === "queued") {
+        weat = `<span class="dim">in queue…</span>`;
+        gap = `<span class="dim">${gA} vs ${gB}</span>`;
+      } else if (job.status === "running") {
+        weat = `<span class="dim">measuring lean…</span>`;
+        gap = `<span class="dim">${gA} vs ${gB}</span>`;
       } else if (r) {
         const m = r.metrics;
         if (m.bias_reduction) {
@@ -1110,14 +1438,14 @@ function renderJobs() {
           trend = sparkline(Object.values(m.bias_after.per_probe_gaps), "#516559");
         } else {
           weat = `${m.bias_before.weat_effect_size}`;
-          gap = `<span class="dim">audit</span>`;
+          gap = `<span class="dim">audit · ${gA}/${gB}</span>`;
           trend = sparkline(Object.values(m.bias_before.per_probe_gaps), "#424242");
         }
       }
       const t = new Date(job.updated_at + (job.updated_at.endsWith("Z") || job.updated_at.includes("+") ? "" : "Z"));
       return `<tr class="${selectedJob === job.id ? "selected" : ""}" onclick="showDetail('${job.id}')">
         <td class="jobname">${job.id.slice(0, 16)}…</td>
-        <td class="mono dim">${job.bias_name}<div class="dim" style="font-size:10px">${job.mode}</div></td>
+        <td class="mono dim">${job.bias_name}<div class="dim" style="font-size:10px">${job.mode} · ${gA} vs ${gB}</div></td>
         <td>${statusPill(job, r)}</td>
         <td class="mono">${weat}</td>
         <td class="mono">${gap}</td>
@@ -1127,28 +1455,86 @@ function renderJobs() {
       </tr>`;
     });
   $("jobs").innerHTML = rows.length ? rows.join("")
-    : `<tr><td colspan="8" class="empty">No jobs yet — click New surgery to run one</td></tr>`;
-  $("jobCount").textContent = `${rows.length} jobs`;
+    : `<tr><td colspan="8" class="empty">${
+        alertsOnly ? "No active alerts — workspace is clear" : "No jobs yet — click New surgery to run one"
+      }</td></tr>`;
+  $("jobCount").textContent = alertsOnly ? `${rows.length} alerting` : `${rows.length} jobs`;
 }
 
 function renderAlerts() {
-  const failed = jobsData.filter(j => j.status === "failed").length;
-  const hot = jobsData.filter(j => {
-    const r = reportCache.get(j.id);
-    return j.mode === "audit" && r && Math.abs(r.metrics.bias_before.weat_effect_size) >= 0.5;
-  });
-  const count = failed + hot.length;
+  // Prefer API alerts; fall back to client-derived while reports hydrate.
+  if (!alertsData.length && jobsData.length) {
+    const local = deriveClientAlerts(jobsData);
+    if (local.length) alertsData = local;
+  }
+  const visible = activeAlerts();
+  const count = visible.length;
   $("alertCount").hidden = count === 0;
   $("alertCount").textContent = count;
-  if (hot.length) {
-    $("alertbar").hidden = false;
-    const worst = hot[0], r = reportCache.get(worst.id);
-    $("alertText").innerHTML = `${count} active alert${count > 1 ? "s" : ""} — ` +
-      `<b>${worst.bias_name}</b> audit found WEAT ${r.metrics.bias_before.weat_effect_size} (unremediated)`;
-  } else if (failed) {
-    $("alertbar").hidden = false;
-    $("alertText").innerHTML = `${failed} job${failed > 1 ? "s" : ""} failed — check job detail`;
-  } else { $("alertbar").hidden = true; }
+  const bar = $("alertbar");
+  if (!count) {
+    bar.hidden = true;
+    $("alertList").classList.remove("open");
+    $("alertList").innerHTML = "";
+    return;
+  }
+  bar.hidden = false;
+  const top = visible[0];
+  const hasCritical = visible.some(a => a.severity === "critical");
+  bar.classList.toggle("critical", hasCritical);
+  $("alertText").innerHTML = `${count} active alert${count > 1 ? "s" : ""} — ` +
+    `<b>${top.bias_name}</b>: ${top.title}`;
+  $("alertRemediateBtn").style.display =
+    (top.kind === "bias_detected" || top.kind === "residual_bias" || top.kind === "overcorrection")
+      ? "" : "none";
+
+  $("alertList").innerHTML = visible.map(a => `
+    <div class="alertitem" onclick="showDetail('${a.job_id}')">
+      <div>
+        <div class="akind ${a.severity}">${a.kind.replace(/_/g, " ")} · ${a.severity}</div>
+        <div class="atitle">${a.title} — <span class="mono">${a.bias_name}</span></div>
+      </div>
+      <div class="aactions">
+        ${a.kind === "bias_detected" || a.kind === "residual_bias" || a.kind === "overcorrection"
+          ? `<button class="btn" onclick="event.stopPropagation(); remediateAlert('${a.bias_name}')">Remediate</button>`
+          : ""}
+        <button class="btn ghost" onclick="event.stopPropagation(); dismissAlert('${a.id}')">Dismiss</button>
+        <button class="btn ghost" onclick="event.stopPropagation(); showDetail('${a.job_id}')">Inspect</button>
+      </div>
+      <div class="adetail">${(a.detail || "").replace(/</g, "&lt;")}</div>
+    </div>`).join("");
+  if (alertsOnly) $("alertList").classList.add("open");
+}
+
+function dismissAlert(id) {
+  const ids = dismissedAlertIds();
+  ids.add(id);
+  persistDismissed(ids);
+  renderAlerts();
+  if (alertsOnly) renderJobs();
+}
+
+function dismissVisibleAlerts() {
+  const ids = dismissedAlertIds();
+  activeAlerts().forEach(a => ids.add(a.id));
+  persistDismissed(ids);
+  renderAlerts();
+  if (alertsOnly) renderJobs();
+  toast("Alerts dismissed");
+}
+
+function remediateAlert(biasName) {
+  openModal();
+  if (biasName) $("fBias").value = biasName;
+  $("fMode").value = "edit";
+  $("fCalibrate").checked = true;
+}
+
+function remediateTopAlert() {
+  const actionable = activeAlerts().find(a =>
+    a.kind === "bias_detected" || a.kind === "residual_bias" || a.kind === "overcorrection");
+  if (actionable) remediateAlert(actionable.bias_name);
+  else openModal();
 }
 
 /* ---------------- rendering: benchmarks ---------------- */
@@ -1174,9 +1560,15 @@ async function showDetail(id) {
   renderJobs();
   const job = jobsData.find(j => j.id === id);
   if (!job) return;
+  const [gA, gB] = groupsForBias(job.bias_name);
+  const leanEl = $("dLean");
+
   if (job.status === "failed") {
     $("dPill").outerHTML = statusPill(job, null).replace("<span", '<span id="dPill"');
     $("dId").textContent = id;
+    leanEl.hidden = false;
+    leanEl.innerHTML = `This surgery <b>failed</b> before we could measure how concepts lean toward
+      <b>${gA}</b> vs <b>${gB}</b>. Fix the error below and re-run.`;
     $("dCards").innerHTML = `<div class="cell" style="grid-column:1/-1"><div class="k">error</div>
       <div class="v" style="font-size:13px;font-weight:500;white-space:pre-wrap">${job.error || "unknown"}</div></div>`;
     $("dChips").innerHTML = ""; $("dBars").innerHTML = ""; $("dActions").innerHTML = "";
@@ -1186,8 +1578,15 @@ async function showDetail(id) {
   if (job.status !== "succeeded") {
     $("dPill").outerHTML = statusPill(job, null).replace("<span", '<span id="dPill"');
     $("dId").textContent = id;
+    leanEl.hidden = false;
+    leanEl.innerHTML = job.status === "queued"
+      ? `Job is <b>queued</b> — it stays here until a worker picks it up. We’re checking whether
+         concepts like professions lean toward <b>${gA}</b> or <b>${gB}</b>.`
+      : `Job is <b>running</b> — measuring which way each concept leans (${gA} vs ${gB}),
+         then locating and editing the internal pathways that cause it.`;
     $("dCards").innerHTML = `<div class="cell" style="grid-column:1/-1"><div class="k">status</div>
-      <div class="v">${job.status}</div><div class="s">report available when the job succeeds</div></div>`;
+      <div class="v">${job.status}</div>
+      <div class="s">this row will update automatically — it will not disappear</div></div>`;
     $("dChips").innerHTML = ""; $("dBars").innerHTML = ""; $("dActions").innerHTML = "";
     $("drawer").classList.add("open");
     return;
@@ -1195,35 +1594,71 @@ async function showDetail(id) {
   const r = await getReport(job);
   if (!r) { toast("Report not ready yet — try again in a moment"); return; }
   const m = r.metrics, edit = !!m.bias_reduction;
+  const groups = (r.bias_spec && r.bias_spec.groups) || [gA, gB];
+  const ga = groups[0] || gA, gb = groups[1] || gB;
   $("dPill").outerHTML = statusPill(job, r).replace("<span", '<span id="dPill"');
   $("dId").textContent = id;
+
+  // Plain-language "what weights / lean mean"
+  const gapsSrc = (edit ? m.bias_after : m.bias_before).per_probe_gaps;
+  const top = Object.entries(gapsSrc).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))[0];
+  const topConcept = (top?.[0] || "a concept").replace(/^a photo of (an? )?/, "");
+  const topLean = leanPhrase(top?.[1], ga, gb);
+  if (edit) {
+    const red = m.bias_reduction.mean_abs_association_gap.reduction_pct;
+    leanEl.hidden = false;
+    leanEl.innerHTML = `<b>What changed:</b> Before surgery, concepts were pulled toward
+      <b>${ga}</b> or <b>${gb}</b> unevenly (e.g. <span class="mono">${topConcept}</span> ${topLean}).
+      We edited the model’s internal numbers (“weights”) so that pull is weaker
+      (<b>−${red}%</b> less stereotyped lean) while everyday meaning stays intact.
+      Downloading the artifact gives you the <b>edited model file</b> — drop-in replacement weights,
+      not a separate “weight score.”`;
+  } else {
+    leanEl.hidden = false;
+    leanEl.innerHTML = `<b>What we measured:</b> For this benchmark the two groups are
+      <b>${ga}</b> vs <b>${gb}</b>. A concept “leans” toward whichever group the model links it
+      more strongly with (e.g. <span class="mono">${topConcept}</span> ${topLean}).
+      Audit mode does <b>not</b> change the model — run Edit to surgically reduce that lean.`;
+  }
+
   const cells = [];
   if (edit) {
-    cells.push([`−${m.bias_reduction.mean_abs_association_gap.reduction_pct}%`, "association gap",
-      `${m.bias_reduction.mean_abs_association_gap.before} → ${m.bias_reduction.mean_abs_association_gap.after}`, "accent"]);
-    cells.push([`${m.bias_reduction.weat_effect_size.reduction_pct}%`, "WEAT reduction",
+    cells.push([`−${m.bias_reduction.mean_abs_association_gap.reduction_pct}%`, "stereotyped lean",
+      `less pull toward ${ga} / ${gb}`, "accent"]);
+    cells.push([`${m.bias_reduction.weat_effect_size.reduction_pct}%`, "bias strength ↓",
       `${m.bias_reduction.weat_effect_size.before} → ${m.bias_reduction.weat_effect_size.after}`, "accent"]);
-    cells.push([(m.retention.embedding_cosine_retention * 100).toFixed(2) + "%", "retention",
-      "embedding cosine, neutral prompts", "up"]);
-    cells.push([r.surgery.num_edits, "projection edits",
-      `strength ${r.surgery.strength ?? 1.0} · k=${r.circuit.num_directions ?? 1}`, ""]);
+    cells.push([(m.retention.embedding_cosine_retention * 100).toFixed(2) + "%", "capability kept",
+      "neutral prompts still match the original", "up"]);
+    cells.push([r.surgery.num_edits, "weight edits",
+      "internal numbers we changed in the model file", ""]);
   } else {
-    cells.push([m.bias_before.weat_effect_size, "WEAT effect size", "measured, no edits", "accent"]);
-    cells.push([m.bias_before.mean_abs_association_gap, "association gap", "mean absolute", ""]);
-    cells.push([r.circuit.selected_components.length, "circuit components", "carrying the bias", ""]);
-    cells.push([`${r.runtime_seconds}s`, "audit runtime", "gradient-free", ""]);
+    cells.push([m.bias_before.weat_effect_size, "bias strength",
+      `|value| ≫ 0 ⇒ strong ${ga}/${gb} stereotyping`, "accent"]);
+    cells.push([m.bias_before.mean_abs_association_gap, "avg lean size",
+      `mean |pull toward ${ga} vs ${gb}|`, ""]);
+    cells.push([r.circuit.selected_components.length, "parts to edit", "where the lean is produced", ""]);
+    cells.push([`${r.runtime_seconds}s`, "audit runtime", "no model changes yet", ""]);
   }
   $("dCards").innerHTML = cells.map(([v, k, s, cls]) =>
     `<div class="cell"><div class="k">${k}</div><div class="v ${cls}">${v}</div><div class="s">${s}</div></div>`).join("");
-  $("dChips").innerHTML = r.circuit.selected_components.map(c => `<span class="chip">${c.label}</span>`).join("");
-  const gaps = Object.entries((edit ? m.bias_after : m.bias_before).per_probe_gaps).slice(0, 10);
+  $("dChips").innerHTML = (r.circuit?.selected_components || []).map(c =>
+    `<span class="chip">${c.label}</span>`).join("") || `<span class="dim">none</span>`;
+  $("dBarsHint").textContent =
+    `Each bar: how hard the model pulls that concept toward ${ga} (right/positive) vs ${gb} (left/negative)`;
+  const gaps = Object.entries(gapsSrc).slice(0, 10);
   const maxGap = Math.max(...gaps.map(([, v]) => Math.abs(v)), 1e-6);
-  $("dBars").innerHTML = gaps.map(([probe, v]) =>
-    `<div class="row"><span class="dim mono">${probe.replace("a photo of ", "")}</span>
+  $("dBars").innerHTML = gaps.map(([probe, v]) => {
+    const concept = probe.replace(/^a photo of (an? )?/, "");
+    return `<div class="row">
+      <span class="dim mono" title="${probe}">${concept}
+        <div class="bar-row-meta">${leanPhrase(v, ga, gb)}</div></span>
       <div class="track"><div class="fill" style="width:${(Math.abs(v) / maxGap) * 100}%"></div></div>
-      <span class="mono">${v.toFixed(4)}</span></div>`).join("");
+      <span class="mono">${v.toFixed(4)}</span></div>`;
+  }).join("");
   const actions = [`<button class="btn ghost" onclick="download('/v1/edit-jobs/${id}/report.html', '${id}-report.html')">Compliance report</button>`];
-  if (edit) actions.push(`<button class="btn" onclick="download('/v1/edit-jobs/${id}/artifact', '${id}-model.zip')">Download weights</button>`);
+  if (edit) {
+    actions.push(`<button class="btn" onclick="download('/v1/edit-jobs/${id}/artifact', '${id}-model.zip')">Download edited model</button>`);
+  }
   $("dActions").innerHTML = actions.join("");
   $("drawer").classList.add("open");
 }
@@ -1252,6 +1687,7 @@ async function submitJob() {
     const modelId = custom || $("fModel").value;
     const job = await api("/v1/edit-jobs", { method: "POST", body: JSON.stringify({
       model_id: modelId, bias: $("fBias").value, mode: $("fMode").value,
+      save_artifact: false,
       options: {
         num_directions: parseInt($("fK").value) || 1,
         calibrate: $("fCalibrate").checked,
@@ -1260,12 +1696,12 @@ async function submitJob() {
     })});
     closeModal();
     $("search").value = "";
-    showView("overview");
-    // Optimistic insert so the job is visible immediately.
+    showAlerts(false); // full Job Health list (not Alerts-only filter)
+    // Optimistic insert so the job is visible immediately and stays listed.
     jobsData = [job, ...jobsData.filter(j => j.id !== job.id)];
     selectedJob = job.id;
     renderJobs(); renderStats(); renderAlerts();
-    toast(`Job ${job.id.slice(0, 16)}… queued`);
+    toast(`Queued — stays in Job Health until finished`);
     await refresh();
     loadUsage();
   } catch (err) { $("formError").textContent = err.message; }
@@ -1281,15 +1717,361 @@ async function download(path, filename) {
   URL.revokeObjectURL(a.href);
 }
 
-/* ---------------- boot ---------------- */
-// hero circuit strip: 18 nodes, 4 biased ones that get severed on a loop
-$("circuitstrip").innerHTML = Array.from({ length: 18 }, (_, i) =>
-  `<span class="cnode ${[2, 6, 10, 13].includes(i) ? "biased" : ""}"></span>`).join("");
-// locate viz: 32 cells, 5 hot
+/* ---------------- live surgery demo (How it works) ---------------- */
+const LD = {
+  cells: 48,
+  hot: [5, 11, 14, 22, 27, 33, 38, 41],
+  probes: [
+    { name: "engineer", before: 92, after: 18 },
+    { name: "surgeon", before: 84, after: 16 },
+    { name: "nurse", before: 78, after: 14 },
+  ],
+  weatBefore: 1.71, weatAfter: 1.02,
+  gapReduction: 78, retention: 99.0, edits: 20,
+  phases: ["measure", "locate", "cut", "prove"],
+  timers: [], running: false, gen: 0, phase: null, autoplay: true,
+};
+
+function ldClearTimers() {
+  LD.timers.forEach(clearTimeout);
+  LD.timers = [];
+}
+function ldLater(ms, fn) {
+  const t = setTimeout(fn, ms);
+  LD.timers.push(t);
+  return t;
+}
+function ldAlive(gen) { return () => gen === LD.gen; }
+function ldLog(lines) {
+  $("ldLog").innerHTML = lines.map(l => `<div class="line">${l}</div>`).join("");
+}
+function ldSetPhase(name) {
+  LD.phase = name;
+  const order = LD.phases;
+  document.querySelectorAll("#ldRail .ld-phase").forEach(el => {
+    const p = el.dataset.phase;
+    const active = p === name;
+    el.classList.toggle("active", active);
+    el.classList.toggle("done", order.indexOf(p) < order.indexOf(name));
+    el.setAttribute("aria-selected", active ? "true" : "false");
+  });
+}
+function ldProgress(pct) { $("ldBar").style.width = `${Math.max(0, Math.min(100, pct))}%`; }
+
+function ldBuildBoard() {
+  $("ldGrid").innerHTML = Array.from({ length: LD.cells }, (_, i) =>
+    `<div class="ld-cell" data-i="${i}"></div>`).join("");
+  $("ldProbes").innerHTML = LD.probes.map((p, i) =>
+    `<div class="ld-probe" data-p="${i}">
+       <span>${p.name}</span>
+       <div class="track"><div class="fill" id="ldFill${i}"></div></div>
+       <span id="ldProbeVal${i}">—</span>
+     </div>`).join("");
+}
+
+function ldResetVisuals() {
+  ldBuildBoard();
+  $("ldWeat").textContent = "—"; $("ldWeat").classList.remove("good");
+  $("ldWeatSub").textContent = "awaiting measurement";
+  $("ldGap").textContent = "—"; $("ldGap").classList.remove("good");
+  $("ldGapSub").textContent = "mean |Δ cosine|";
+  $("ldRet").textContent = "—"; $("ldRet").classList.remove("good");
+  $("ldRetSub").textContent = "neutral prompt fidelity";
+  $("ldBoardTitle").textContent = "Model components";
+  $("ldBoardMeta").textContent = "12 layers · attention + MLP";
+  $("ldStatus").innerHTML = "Click <b>01–04</b> to explore · or watch the autoplay";
+  ldProgress(0);
+  document.querySelectorAll("#ldRail .ld-phase").forEach(el =>
+    el.classList.remove("active", "done"));
+  ldLog(["> scalpel surgery — click a step or wait for autoplay"]);
+}
+
+function ldAnimateNumber(el, from, to, dur, fmt) {
+  const start = performance.now();
+  function tick(now) {
+    const p = Math.min(1, (now - start) / dur);
+    const e = 1 - Math.pow(1 - p, 3);
+    el.textContent = fmt(from + (to - from) * e);
+    if (p < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+function ldClearCells() {
+  [...$("ldGrid").children].forEach(c =>
+    c.classList.remove("scan", "hot", "cut", "fade"));
+}
+
+function ldShowMeasure(animate) {
+  const alive = ldAlive(LD.gen);
+  ldClearCells();
+  ldSetPhase("measure");
+  $("ldBoardTitle").textContent = "Measuring association bias";
+  $("ldBoardMeta").textContent = "contrastive prompts · WEAT";
+  $("ldStatus").innerHTML = "Measuring bias across <b>profession probes</b>…";
+  ldLog([
+    "> measure: 48 contrastive pairs × profession probes",
+    "> computing WEAT effect size on text tower…",
+  ]);
+  ldProgress(22);
+  $("ldGap").textContent = "—"; $("ldGap").classList.remove("good");
+  $("ldRet").textContent = "—"; $("ldRet").classList.remove("good");
+  $("ldWeat").classList.remove("good");
+  if (animate) {
+    ldAnimateNumber($("ldWeat"), 0, LD.weatBefore, 900, v => v.toFixed(2));
+    let scan = 0;
+    const scanStep = () => {
+      if (!alive()) return;
+      const cells = [...$("ldGrid").children];
+      cells.forEach(c => c.classList.remove("scan"));
+      for (let k = 0; k < 6; k++) cells[(scan + k) % cells.length]?.classList.add("scan");
+      scan += 3;
+      if (scan < cells.length + 12) ldLater(70, scanStep);
+    };
+    scanStep();
+    LD.probes.forEach((p, i) => {
+      ldLater(180 + i * 160, () => {
+        if (!alive()) return;
+        const fill = $(`ldFill${i}`);
+        fill.classList.remove("neutral");
+        fill.style.width = `${p.before}%`;
+        $(`ldProbeVal${i}`).textContent = `+${(p.before / 100 * 0.02).toFixed(3)}`;
+      });
+    });
+  } else {
+    $("ldWeat").textContent = LD.weatBefore.toFixed(2);
+    LD.probes.forEach((p, i) => {
+      const fill = $(`ldFill${i}`);
+      fill.classList.remove("neutral");
+      fill.style.width = `${p.before}%`;
+      $(`ldProbeVal${i}`).textContent = `+${(p.before / 100 * 0.02).toFixed(3)}`;
+    });
+  }
+  $("ldWeatSub").textContent = "baseline — stereotyped association";
+}
+
+function ldShowLocate(animate) {
+  const alive = ldAlive(LD.gen);
+  ldClearCells();
+  ldSetPhase("locate");
+  $("ldBoardTitle").textContent = "Isolating the bias circuit";
+  $("ldBoardMeta").textContent = "attribution across heads + MLPs";
+  $("ldStatus").innerHTML = "Localizing which components <b>write the bias</b>…";
+  ldLog([
+    "> locate: diff-in-means direction @ layer 9 (9.5σ)",
+    "> ranking component writes onto bias subspace…",
+  ]);
+  ldProgress(48);
+  $("ldWeat").textContent = LD.weatBefore.toFixed(2);
+  $("ldWeatSub").textContent = "baseline — stereotyped association";
+  LD.probes.forEach((p, i) => {
+    const fill = $(`ldFill${i}`);
+    fill.classList.remove("neutral");
+    fill.style.width = `${p.before}%`;
+    $(`ldProbeVal${i}`).textContent = `+${(p.before / 100 * 0.02).toFixed(3)}`;
+  });
+  if (animate) {
+    LD.hot.forEach((idx, n) => {
+      ldLater(n * 140, () => {
+        if (!alive()) return;
+        $("ldGrid").children[idx]?.classList.add("hot");
+        $("ldBoardMeta").textContent = `${n + 1} of ${LD.hot.length} circuit components`;
+      });
+    });
+  } else {
+    LD.hot.forEach(idx => $("ldGrid").children[idx]?.classList.add("hot"));
+    $("ldBoardMeta").textContent = `${LD.hot.length} of ${LD.hot.length} circuit components`;
+  }
+}
+
+function ldShowCut(animate) {
+  const alive = ldAlive(LD.gen);
+  ldClearCells();
+  ldSetPhase("cut");
+  $("ldBoardTitle").textContent = "Applying closed-form surgery";
+  $("ldBoardMeta").textContent = "W′ = W − α Vᵀ(VW)";
+  $("ldStatus").innerHTML = "Severing circuit with <b>rank-k projections</b>…";
+  ldLog([
+    "> cut: projecting bias subspace out of selected weights",
+    "> calibrate α → target neutrality (not over-erasure)",
+  ]);
+  ldProgress(72);
+  $("ldWeat").textContent = LD.weatBefore.toFixed(2);
+  LD.probes.forEach((p, i) => {
+    const fill = $(`ldFill${i}`);
+    fill.classList.remove("neutral");
+    fill.style.width = `${p.before}%`;
+    $(`ldProbeVal${i}`).textContent = `+${(p.before / 100 * 0.02).toFixed(3)}`;
+  });
+  if (animate) {
+    let edits = 0;
+    LD.hot.forEach((idx, n) => {
+      ldLater(n * 120, () => {
+        if (!alive()) return;
+        const cell = $("ldGrid").children[idx];
+        if (!cell) return;
+        cell.classList.add("cut");
+        edits += Math.ceil(LD.edits / LD.hot.length);
+        $("ldBoardMeta").textContent = `${Math.min(edits, LD.edits)} projection edits applied`;
+        ldLater(200, () => { if (alive()) cell.classList.add("fade"); });
+      });
+    });
+  } else {
+    LD.hot.forEach(idx => {
+      const cell = $("ldGrid").children[idx];
+      if (cell) cell.classList.add("cut", "fade");
+    });
+    $("ldBoardMeta").textContent = `${LD.edits} projection edits applied`;
+  }
+}
+
+function ldShowProve(animate) {
+  const alive = ldAlive(LD.gen);
+  ldClearCells();
+  LD.hot.forEach(idx => {
+    const cell = $("ldGrid").children[idx];
+    if (cell) cell.classList.add("cut", "fade");
+  });
+  ldSetPhase("prove");
+  $("ldBoardTitle").textContent = "Post-surgery audit";
+  $("ldBoardMeta").textContent = `${LD.edits} edits · circuit severed`;
+  $("ldStatus").innerHTML = "Verifying <b>bias down</b>, capability retained…";
+  ldLog([
+    "> prove: re-run WEAT + retention probes",
+    "> writing compliance report + edited model file…",
+  ]);
+  ldProgress(92);
+  if (animate) {
+    ldAnimateNumber($("ldWeat"), LD.weatBefore, LD.weatAfter, 800, v =>
+      `${LD.weatBefore.toFixed(2)} → ${v.toFixed(2)}`);
+    ldLater(150, () => {
+      if (!alive()) return;
+      $("ldWeat").classList.add("good");
+      $("ldWeatSub").textContent = "−40% WEAT · live CLIP run";
+    });
+    ldAnimateNumber($("ldGap"), 0, LD.gapReduction, 800, v => `−${v.toFixed(0)}%`);
+    ldAnimateNumber($("ldRet"), 90, LD.retention, 800, v => `${v.toFixed(1)}%`);
+    LD.probes.forEach((p, i) => {
+      ldLater(120 + i * 100, () => {
+        if (!alive()) return;
+        const fill = $(`ldFill${i}`);
+        fill.classList.add("neutral");
+        fill.style.width = `${p.after}%`;
+        $(`ldProbeVal${i}`).textContent = `+${(p.after / 100 * 0.02).toFixed(3)}`;
+      });
+    });
+    ldLater(1100, () => {
+      if (!alive()) return;
+      ldProgress(100);
+      $("ldStatus").innerHTML =
+        "Surgery complete — <b>−78% gap</b>, <b>99.0% retention</b> · click 01–04 to revisit";
+      ldLog([
+        "> done · WEAT 1.71 → 1.02 (−40%) · gap −78% · retention 99.0%",
+        "> artifact ready · report.html · model.zip",
+      ]);
+      LD.running = false;
+    });
+  } else {
+    $("ldWeat").textContent = `${LD.weatBefore.toFixed(2)} → ${LD.weatAfter.toFixed(2)}`;
+    $("ldWeat").classList.add("good");
+    $("ldWeatSub").textContent = "−40% WEAT · live CLIP run";
+    $("ldGap").textContent = `−${LD.gapReduction}%`;
+    $("ldGap").classList.add("good");
+    $("ldGapSub").textContent = "association gap reduction";
+    $("ldRet").textContent = `${LD.retention.toFixed(1)}%`;
+    $("ldRet").classList.add("good");
+    $("ldRetSub").textContent = "embedding cosine on neutral prompts";
+    LD.probes.forEach((p, i) => {
+      const fill = $(`ldFill${i}`);
+      fill.classList.add("neutral");
+      fill.style.width = `${p.after}%`;
+      $(`ldProbeVal${i}`).textContent = `+${(p.after / 100 * 0.02).toFixed(3)}`;
+    });
+    ldProgress(100);
+    $("ldStatus").innerHTML =
+      "Surgery complete — <b>−78% gap</b>, <b>99.0% retention</b> · click 01–04 to revisit";
+    ldLog([
+      "> done · WEAT 1.71 → 1.02 (−40%) · gap −78% · retention 99.0%",
+      "> artifact ready · report.html · model.zip",
+    ]);
+  }
+  $("ldGap").classList.add("good");
+  $("ldGapSub").textContent = "association gap reduction";
+  $("ldRet").classList.add("good");
+  $("ldRetSub").textContent = "embedding cosine on neutral prompts";
+}
+
+function jumpLiveDemo(phase) {
+  if (!LD.phases.includes(phase)) return;
+  ldClearTimers();
+  LD.running = false;
+  LD.autoplay = false;
+  LD.gen += 1;
+  ldBuildBoard();
+  const animate = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (phase === "measure") ldShowMeasure(animate);
+  else if (phase === "locate") ldShowLocate(animate);
+  else if (phase === "cut") ldShowCut(animate);
+  else ldShowProve(animate);
+}
+
+function restartLiveDemo() {
+  ldClearTimers();
+  LD.running = false;
+  LD.autoplay = true;
+  startLiveDemo(true);
+}
+
+function startLiveDemo(force = false) {
+  if (!force && LD.running) return;
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduce) {
+    ldResetVisuals();
+    jumpLiveDemo("prove");
+    return;
+  }
+
+  ldClearTimers();
+  LD.running = true;
+  LD.autoplay = true;
+  const gen = ++LD.gen;
+  const alive = () => gen === LD.gen;
+
+  ldResetVisuals();
+  $("ldStatus").innerHTML = "Loading <b>clip-vit-base-patch32</b>… · click any step to jump";
+  ldLog(["> load openai/clip-vit-base-patch32", "> bias spec: gender_profession · mode=edit · k=4"]);
+  ldProgress(4);
+
+  ldLater(600, () => { if (alive() && LD.autoplay) ldShowMeasure(true); });
+  ldLater(2800, () => { if (alive() && LD.autoplay) ldShowLocate(true); });
+  ldLater(2800 + 160 * LD.hot.length + 500, () => {
+    if (alive() && LD.autoplay) ldShowCut(true);
+  });
+  const proveAt = 2800 + 160 * LD.hot.length + 500 + 140 * LD.hot.length + 600;
+  ldLater(proveAt, () => { if (alive() && LD.autoplay) ldShowProve(true); });
+}
+
+// locate viz in step 02 (static accent)
 $("vizGrid").innerHTML = Array.from({ length: 32 }, (_, i) =>
   `<i class="${[3, 10, 17, 20, 26].includes(i) ? "hot" : ""}"></i>`).join("");
+ldBuildBoard();
 
-$("apiKey").value = localStorage.getItem("scalpel_key") || "";
+(function hydrateSession() {
+  const params = new URLSearchParams(location.search);
+  const fromUrl = (params.get("key") || "").trim();
+  if (fromUrl) {
+    localStorage.setItem("scalpel_key", fromUrl);
+    params.delete("key");
+    const qs = params.toString();
+    history.replaceState({}, "", location.pathname + (qs ? `?${qs}` : "") + location.hash);
+  }
+  $("apiKey").value = localStorage.getItem("scalpel_key") || "";
+  const uname = localStorage.getItem("scalpel_user");
+  if (uname) {
+    $("userName").textContent = uname;
+    $("avatar").textContent = uname.slice(0, 1).toUpperCase();
+  }
+})();
 let keyTimer = null;
 function onKeyUpdated() {
   localStorage.setItem("scalpel_key", currentKey());
