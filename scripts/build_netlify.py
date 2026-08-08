@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Build a static Netlify publish directory for the Scalpel marketing site.
 
+Stdlib-only (no FastAPI/torch) so Netlify's Python build can succeed.
+
 The FastAPI API (signup DB, jobs, console) must run separately with
-DATABASE_URL=postgres://… so accounts persist. Netlify hosts the site and
-proxies /v1/* and /app to that API (see netlify.toml).
+DATABASE_URL=postgres://… . Netlify hosts the site and proxies /v1/* and /app
+to that API (see netlify.toml).
 
 Usage:
   SCALPEL_API_ORIGIN=https://api.yourdomain.com python scripts/build_netlify.py
@@ -12,6 +14,7 @@ Usage:
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -20,22 +23,128 @@ ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "src" / "scalpel" / "api" / "static"
 OUT = ROOT / "netlify-dist"
 
-# Origin of the Python API (no trailing slash). Empty = same-origin proxy.
 API_ORIGIN = (
     os.environ.get("SCALPEL_API_ORIGIN")
     or os.environ.get("SCALPEL_PUBLIC_API_URL")
     or ""
 ).rstrip("/")
 
+_NAV_LINKS = (
+    ("product", "/product", "Product"),
+    ("developers", "/developers", "Developers"),
+    ("security", "/security", "Security"),
+)
+
+_FOOTER = """<footer class="site-footer">
+  <div class="foot-grid">
+    <div class="foot-brand">
+      <div class="nav-brand"><span></span>Scalpel</div>
+      <p>Surgical model editing for teams that ship under audit.</p>
+    </div>
+    <div>
+      <h4>Product</h4>
+      <a href="/product">How it works</a>
+      <a href="/developers">Developers</a>
+      <a href="/security">Security</a>
+    </div>
+    <div>
+      <h4>Platform</h4>
+      <a href="/app">Console</a>
+      <a href="/docs">API reference</a>
+      <a href="/signup">Create workspace</a>
+      <a href="/login">Log in</a>
+    </div>
+    <div>
+      <h4>Company</h4>
+      <a href="mailto:sales@scalpel.ai">sales@scalpel.ai</a>
+      <a href="/privacy">Privacy</a>
+      <a href="/terms">Terms</a>
+    </div>
+  </div>
+  <div class="foot-base">
+    <span>© Scalpel AI</span>
+    <span>Bias ops · rank-one edits · compliance artifacts</span>
+  </div>
+</footer>"""
+
+
+def _version() -> str:
+    text = (ROOT / "pyproject.toml").read_text()
+    m = re.search(r'^version\s*=\s*"([^"]+)"', text, re.M)
+    return m.group(1) if m else "0.0.0"
+
+
+def _nav(active: str) -> str:
+    links = []
+    for key, href, label in _NAV_LINKS:
+        cls = ' class="active"' if key == active else ""
+        links.append(f'<a href="{href}"{cls}>{label}</a>')
+    mid = "\n        ".join(links)
+    return f"""<header class="site-nav">
+  <a class="nav-brand" href="/"><span></span>Scalpel</a>
+  <nav class="nav-mid">
+        {mid}
+  </nav>
+  <div class="nav-actions" data-auth-slot>
+    <a class="btn btn-ghost" href="/app">Console</a>
+    <a class="btn btn-line" href="/login">Log in</a>
+    <a class="btn btn-solid" href="/signup">Get started</a>
+  </div>
+</header>"""
+
+
+def _render(
+    name: str,
+    *,
+    title: str,
+    description: str,
+    active: str = "",
+    api_base: str = "",
+) -> str:
+    html = (STATIC / name).read_text()
+    css_v = int((STATIC / "site.css").stat().st_mtime)
+    session_v = int((STATIC / "session.js").stat().st_mtime)
+    live = STATIC / "live-demo.js"
+    live_v = int(live.stat().st_mtime) if live.exists() else 0
+    og = f"""<title>{title}</title>
+<meta name="description" content="{description}">
+<meta property="og:type" content="website">
+<meta property="og:title" content="{title}">
+<meta property="og:description" content="{description}">
+<meta property="og:image" content="/static/og.svg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{title}">
+<meta name="twitter:description" content="{description}">
+<meta name="twitter:image" content="/static/og.svg">
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/static/favicon.svg">
+<link rel="stylesheet" href="/static/site.css?v={css_v}">"""
+    api_boot = (
+        f"<script>window.SCALPEL_API_BASE={api_base!r};</script>\n"
+        f'<script src="/static/session.js?v={session_v}"></script>\n'
+        f'<script src="/static/live-demo.js?v={live_v}"></script>'
+    )
+    html = html.replace("__HEAD_META__", og)
+    html = html.replace("__NAV__", _nav(active))
+    html = html.replace("__FOOTER__", _FOOTER)
+    html = html.replace("</body>", f"{api_boot}\n</body>")
+    html = html.replace("__SCALPEL_VERSION__", _version())
+    html = html.replace("__API_BASE__", api_base)
+    return html
+
 
 def main() -> int:
-    sys.path.insert(0, str(ROOT / "src"))
-    from scalpel.api.marketing import render_marketing_page
+    if not STATIC.is_dir():
+        print(f"ERROR: static dir missing at {STATIC}", file=sys.stderr)
+        return 1
 
     if OUT.exists():
         shutil.rmtree(OUT)
     out_static = OUT / "static"
     out_static.mkdir(parents=True)
+
+    # Browser calls stay same-origin; Netlify proxies /v1 and /app to the API.
+    api_base = ""
 
     pages = {
         "index.html": ("landing.html", "Scalpel — Surgical model editing",
@@ -53,16 +162,10 @@ def main() -> int:
                        "Terms of service.", ""),
     }
 
-    # Browser calls stay same-origin; Netlify proxies /v1 and /app to the API.
-    api_base = ""
-    os.environ["SCALPEL_PUBLIC_API_URL"] = api_base
-
     for out_name, (src, title, desc, active) in pages.items():
-        resp = render_marketing_page(
-            src, title=title, description=desc, active=active,
-            replacements={"__API_BASE__": api_base},
+        (OUT / out_name).write_text(
+            _render(src, title=title, description=desc, active=active, api_base=api_base)
         )
-        (OUT / out_name).write_text(resp.body.decode("utf-8"))
 
     auth_src = (STATIC / "auth.html").read_text()
     for mode, title in (("login", "Log in"), ("signup", "Sign up")):
@@ -73,27 +176,20 @@ def main() -> int:
         )
         (OUT / f"{mode}.html").write_text(html)
 
-    for name in (
-        "site.css",
-        "session.js",
-        "live-demo.js",
-        "favicon.svg",
-        "og.svg",
-        "index.html",  # console also copied for /app fallback if not proxied
-    ):
+    for name in ("site.css", "session.js", "live-demo.js", "favicon.svg", "og.svg"):
         src = STATIC / name
         if src.exists():
-            if name == "index.html":
-                # Console stays on the API host via redirect; keep a copy as app.html
-                text = src.read_text().replace("__SCALPEL_VERSION__", "netlify")
-                (OUT / "app.html").write_text(text)
-            else:
-                shutil.copy2(src, out_static / name)
+            shutil.copy2(src, out_static / name)
 
-    # Pretty-URL fallbacks as duplicate paths for file-based hosts.
-    redirects = OUT / "_redirects"
+    # Console fallback if /app proxy is misconfigured
+    console = STATIC / "index.html"
+    if console.exists():
+        (OUT / "app.html").write_text(
+            console.read_text().replace("__SCALPEL_VERSION__", _version())
+        )
+
     api = API_ORIGIN or "https://YOUR_API_HOST"
-    redirects.write_text(
+    (OUT / "_redirects").write_text(
         "\n".join(
             [
                 "# Pretty marketing paths",
@@ -105,7 +201,7 @@ def main() -> int:
                 "/login         /login.html         200",
                 "/signup        /signup.html        200",
                 "",
-                "# Proxy API + console to the Scalpel Python service",
+                "# Proxy API + console + share links to the Scalpel Python service",
                 f"/v1/*          {api}/v1/:splat     200",
                 f"/r/*           {api}/r/:splat      200",
                 f"/app           {api}/app           200",
@@ -121,11 +217,18 @@ def main() -> int:
         )
     )
 
+    index = OUT / "index.html"
+    if not index.is_file() or index.stat().st_size < 100:
+        print("ERROR: index.html was not written — publish would 404", file=sys.stderr)
+        return 1
+
     print(f"Wrote {OUT} (API origin for proxies: {api})")
+    print(f"index.html bytes={index.stat().st_size}")
     if "YOUR_API_HOST" in api:
         print(
-            "WARNING: Set SCALPEL_API_ORIGIN to your FastAPI host before deploying "
-            "(Postgres DATABASE_URL must be set on that host)."
+            "WARNING: Set SCALPEL_API_ORIGIN in Netlify env to your FastAPI host "
+            "(Postgres DATABASE_URL must be set on that host). "
+            "Without it, live surgery / signup will 404 behind the proxy."
         )
     return 0
 

@@ -123,17 +123,25 @@ cp .env.example .env && docker compose up   # API + Postgres for durable signup
 
 ### Netlify (marketing site) + API host
 
-Netlify serves the static marketing/auth pages. Signup and jobs hit your
-Python API, which **must** use Postgres for accounts:
+Visitors use **one Netlify URL**. The site is static; `/v1/*`, `/app`, and `/r/*`
+are proxied to your API so live surgery still runs for real.
 
 1. Deploy `scalpel serve` (Railway, Fly, Render, GPU box, or `docker compose`)
-   with `DATABASE_URL=postgresql://…` and `pip install "scalpel-ai[postgres]"`.
-2. In Netlify, set `SCALPEL_API_ORIGIN=https://your-api-host` and deploy.
-   `scripts/build_netlify.py` writes proxies for `/v1/*`, `/app`, `/docs`.
-3. Signups from the Netlify site persist in Postgres via the API.
+   with `DATABASE_URL=postgresql://…`, `SCALPEL_PUBLIC_DEMO=1`, and
+   `pip install "scalpel-ai[postgres]"`.
+2. In Netlify → Site settings → Environment variables, set
+   `SCALPEL_API_ORIGIN=https://your-api-host` (no trailing slash).
+3. Connect the GitHub repo. Build command/publish dir come from `netlify.toml`
+   (`python3 scripts/build_netlify.py` → `netlify-dist/`). The build is
+   **stdlib-only** (no torch/fastapi install on Netlify).
+4. Trigger a redeploy. Open the Netlify URL — `/` should load the landing page;
+   live demo hits `/v1/public/demo-jobs` via the proxy.
+
+If Netlify shows **Page not found**, the deploy likely failed or publish dir
+is wrong — check Deploy log for `Wrote .../netlify-dist` and `index.html bytes=`.
 
 ```bash
-SCALPEL_API_ORIGIN=https://api.yourdomain.com python scripts/build_netlify.py
+SCALPEL_API_ORIGIN=https://api.yourdomain.com python3 scripts/build_netlify.py
 # publish netlify-dist/ (or connect the repo; netlify.toml runs the build)
 ```
 
