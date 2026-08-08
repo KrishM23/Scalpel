@@ -58,7 +58,8 @@
   const LD = {
     cells: 48,
     hot: PREVIEW.hot,
-    timers: [],
+    cellTimers: [],   // per-phase board animations — safe to clear on each scene
+    storyTimers: [],  // autoplay advance — must NOT clear when entering a phase
     pollTimer: null,
     gen: 0,
     phase: "measure",
@@ -66,6 +67,7 @@
     report: null,
     live: false,
     jobId: null,
+    pollFails: 0,
     shareUrl: null,
     pdfUrl: null,
     recipeUrl: null,
@@ -73,9 +75,13 @@
     modelId: null,
   };
 
-  function ldClearAnim() {
-    LD.timers.forEach(clearTimeout);
-    LD.timers = [];
+  function ldClearCellTimers() {
+    LD.cellTimers.forEach(clearTimeout);
+    LD.cellTimers = [];
+  }
+  function ldClearStoryTimers() {
+    LD.storyTimers.forEach(clearTimeout);
+    LD.storyTimers = [];
   }
   function ldClearPoll() {
     if (LD.pollTimer) {
@@ -83,9 +89,21 @@
       LD.pollTimer = null;
     }
   }
-  function ldLater(ms, fn) {
+  function ldClearAllTimers() {
+    ldClearCellTimers();
+    ldClearStoryTimers();
+    ldClearPoll();
+  }
+  /** Board micro-animations for the current phase only. */
+  function ldCellLater(ms, fn) {
     const t = setTimeout(fn, ms);
-    LD.timers.push(t);
+    LD.cellTimers.push(t);
+    return t;
+  }
+  /** Autplay / story schedule — survives showPhase(). */
+  function ldStoryLater(ms, fn) {
+    const t = setTimeout(fn, ms);
+    LD.storyTimers.push(t);
     return t;
   }
 
@@ -236,7 +254,7 @@
 
   function showPhase(phase, { animate } = { animate: true }) {
     if (!PHASES.includes(phase)) return;
-    ldClearAnim();
+    ldClearCellTimers();
     LD.phase = phase;
     const copy = COPY[phase];
     const d = data();
@@ -275,19 +293,19 @@
       setCells("");
       if (animate && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
         LD.hot.forEach((idx, n) => {
-          ldLater(n * 90, () => $("ldGrid")?.children[idx]?.classList.add("hot"));
+          ldCellLater(n * 90, () => $("ldGrid")?.children[idx]?.classList.add("hot"));
         });
       } else setCells("hot");
     } else if (phase === "cut") {
       setCells("hot");
       if (animate && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
         LD.hot.forEach((idx, n) => {
-          ldLater(120 + n * 80, () => {
+          ldCellLater(120 + n * 80, () => {
             const cell = $("ldGrid")?.children[idx];
             if (!cell) return;
             cell.classList.remove("hot");
             cell.classList.add("cut");
-            ldLater(200, () => cell.classList.add("fade"));
+            ldCellLater(200, () => cell.classList.add("fade"));
           });
         });
       } else setCells("done");
@@ -332,38 +350,52 @@
 
   function playAutoplay(gen) {
     LD.autoplay = true;
+    ldClearStoryTimers();
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduce) {
       showPhase("prove", { animate: false });
       return;
     }
-    showPhase("measure", { animate: true });
-    ldLater(2200, () => { if (gen === LD.gen && LD.autoplay) showPhase("locate", { animate: true }); });
-    ldLater(2200 + 2400, () => { if (gen === LD.gen && LD.autoplay) showPhase("cut", { animate: true }); });
-    ldLater(2200 + 2400 + 2600, () => {
+    // Chain phases so showPhase() clearing cell timers cannot cancel the next step.
+    const plan = [
+      ["measure", 2200],
+      ["locate", 2400],
+      ["cut", 2600],
+      ["prove", 0],
+    ];
+    function advance(i) {
       if (gen !== LD.gen || !LD.autoplay) return;
-      showPhase("prove", { animate: true });
-      const st = $("ldStatus");
-      if (st && !LD.live) {
-        st.innerHTML = "Preview complete — <b>waiting for live job</b>… click 01–04 anytime";
-      } else if (st && LD.live) {
-        const d = data();
-        st.innerHTML =
-          `Surgery complete — <b>−${Number(d.gapPct).toFixed(0)}% gap</b>, ` +
-          `<b>${Number(d.retention).toFixed(1)}% retention</b>`;
+      const [phase, wait] = plan[i];
+      showPhase(phase, { animate: true });
+      if (i >= plan.length - 1) {
+        const st = $("ldStatus");
+        if (st && LD.live) {
+          const d = data();
+          st.innerHTML =
+            `Surgery complete — <b>−${Number(d.gapPct).toFixed(0)}% gap</b>, ` +
+            `<b>${Number(d.retention).toFixed(1)}% retention</b>`;
+        } else if (st) {
+          st.innerHTML = "Walkthrough complete — click <b>01–04</b> anytime" +
+            (LD.jobId ? " · live job still running in background" : "");
+        }
+        return;
       }
-    });
+      ldStoryLater(wait, () => advance(i + 1));
+    }
+    advance(0);
   }
 
   function jumpLiveDemo(phase) {
+    // Clicks only change the scene — never touch the API.
     LD.autoplay = false;
-    ldClearAnim();
+    ldClearStoryTimers();
+    ldClearCellTimers();
     showPhase(phase, { animate: true });
     const st = $("ldStatus");
     if (st) {
       st.innerHTML = LD.live
         ? `${COPY[phase].status} <span class="ld-muted">(live results)</span>`
-        : `${COPY[phase].status} <span class="ld-muted">(guided preview — live job in background)</span>`;
+        : `${COPY[phase].status} <span class="ld-muted">(click any step · live job is separate)</span>`;
     }
   }
 
@@ -398,16 +430,14 @@
     }
   }
 
-  async function pollJob(jobId, gen) {
+  async function pollJob(jobId) {
     try {
       const res = await fetch(api(`/v1/public/demo-jobs/${jobId}`));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      LD.pollFails = 0;
       const body = await res.json();
-      if (gen !== LD.gen && !LD.live) {
-        // gen bumped by step clicks — keep polling under a stable job id
-      }
       if (body.status === "queued" || body.status === "running") {
-        LD.pollTimer = setTimeout(() => pollJob(jobId, gen), 1500);
+        LD.pollTimer = setTimeout(() => pollJob(jobId), 2000);
         return;
       }
       if (body.status === "succeeded" && body.report) {
@@ -415,19 +445,24 @@
         return;
       }
       if (body.status === "failed") {
-        const st = $("ldStatus");
-        if (st) st.innerHTML = `Live job failed — showing preview. <b>${body.error || "error"}</b>`;
+        const label = $("ldModelLabel");
+        if (label) label.textContent = `${body.model_id || "model"} · preview (job failed)`;
       }
-    } catch (err) {
-      const st = $("ldStatus");
-      if (st && !LD.live) {
-        st.innerHTML = `Live API unreachable — <b>preview mode</b> (${err.message})`;
+    } catch (_) {
+      LD.pollFails += 1;
+      // 502 / proxy blips: quiet backoff, never interrupt the walkthrough UI.
+      if (LD.pollFails < 6) {
+        LD.pollTimer = setTimeout(() => pollJob(jobId), 3000 * LD.pollFails);
+      } else {
+        const label = $("ldModelLabel");
+        if (label && !LD.live) label.textContent = `${selectedModel()} · preview only`;
       }
     }
   }
 
   async function startJob(force, exportWeights) {
     ldClearPoll();
+    LD.pollFails = 0;
     const bias = selectedBias();
     const modelId = selectedModel();
     const label = $("ldModelLabel");
@@ -453,23 +488,22 @@
         applyLiveResult(body);
         return;
       }
-      pollJob(body.id, LD.gen);
-    } catch (err) {
+      pollJob(body.id);
+    } catch (_) {
+      // API/proxy down (common Netlify 502 if SCALPEL_API_ORIGIN unset) — keep demo smooth.
       if (label) label.textContent = `${modelId} · preview only`;
-      const st = $("ldStatus");
-      if (st && LD.phase === "prove" && !LD.live) {
-        st.innerHTML = `Preview mode — live API: <b>${err.message}</b>`;
-      }
+      LD.jobId = null;
     }
   }
 
   function restartLiveDemo() {
-    ldClearAnim();
-    ldClearPoll();
+    ldClearAllTimers();
     LD.gen += 1;
     const gen = LD.gen;
     LD.report = null;
     LD.live = false;
+    LD.jobId = null;
+    LD.pollFails = 0;
     LD.shareUrl = LD.pdfUrl = LD.recipeUrl = LD.artifactUrl = null;
     LD.autoplay = true;
     const share = $("ldShare");
