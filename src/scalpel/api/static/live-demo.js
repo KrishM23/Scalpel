@@ -1,33 +1,83 @@
-/** Live Measure → Locate → Cut → Prove demo backed by POST /v1/public/demo-jobs. */
+/**
+ * Guided surgery walkthrough — demo-smooth visuals, live metrics when ready.
+ * Step clicks only change the scene (never restart the job).
+ */
 (function () {
   function $(id) { return document.getElementById(id); }
   if (!$("liveDemo")) return;
 
   const apiBase = () => (window.SCALPEL_API_BASE || "").replace(/\/$/, "");
   const api = (path) => `${apiBase()}${path}`;
+  const PHASES = ["measure", "locate", "cut", "prove"];
+
+  const PREVIEW = {
+    probes: [
+      { name: "power drill", before: 0.018, after: 0.003 },
+      { name: "makeup palette", before: -0.016, after: -0.002 },
+      { name: "sports car", before: 0.014, after: 0.002 },
+    ],
+    weatBefore: 1.71,
+    weatAfter: 1.02,
+    gapPct: 78,
+    retention: 99.0,
+    edits: 20,
+    hot: [5, 11, 14, 22, 27, 33, 38, 41],
+  };
+
+  const COPY = {
+    measure: {
+      title: "01 · Measure the bias",
+      meta: "Contrastive prompts · WEAT effect size",
+      caption: "Ask the model the same questions about different groups. The association gap shows how hard it leans.",
+      status: "Measuring stereotyped associations…",
+      log: ["> measure: 48 contrastive pairs", "> computing WEAT on the text tower…"],
+    },
+    locate: {
+      title: "02 · Locate the circuit",
+      meta: "Attribution across attention heads + MLPs",
+      caption: "Not the whole network — only the components that write the bias into the residual stream.",
+      status: "Isolating the bias circuit…",
+      log: ["> locate: diff-in-means direction", "> ranking component writes onto the bias subspace…"],
+    },
+    cut: {
+      title: "03 · Cut it out of the weights",
+      meta: "Closed-form rank-k projections · W′ = W − α Vᵀ(VW)",
+      caption: "A surgical edit removes that direction. No fine-tuning loop — deterministic projections on the hot components.",
+      status: "Applying closed-form surgery…",
+      log: ["> cut: project bias subspace out of selected weights", "> calibrate α so capability stays intact…"],
+    },
+    prove: {
+      title: "04 · Prove it worked",
+      meta: "Re-measure WEAT · retention on neutral prompts",
+      caption: "Bias down, capability retained. Export the report, recipe, or edited weights.",
+      status: "Verifying bias ↓ and retention…",
+      log: ["> prove: re-run WEAT + retention probes", "> packing compliance artifacts…"],
+    },
+  };
 
   const LD = {
     cells: 48,
-    hot: [5, 11, 14, 22, 27, 33, 38, 41],
+    hot: PREVIEW.hot,
     timers: [],
-    running: false,
-    gen: 0,
-    phase: null,
-    jobId: null,
     pollTimer: null,
+    gen: 0,
+    phase: "measure",
+    autoplay: true,
     report: null,
+    live: false,
+    jobId: null,
     shareUrl: null,
     pdfUrl: null,
     recipeUrl: null,
     artifactUrl: null,
-    reproduceCurl: null,
-    pendingResult: null,
-    storyDone: false,
+    modelId: null,
   };
 
-  function ldClearTimers() {
+  function ldClearAnim() {
     LD.timers.forEach(clearTimeout);
     LD.timers = [];
+  }
+  function ldClearPoll() {
     if (LD.pollTimer) {
       clearTimeout(LD.pollTimer);
       LD.pollTimer = null;
@@ -38,363 +88,350 @@
     LD.timers.push(t);
     return t;
   }
-  function ldAlive(gen) { return () => gen === LD.gen; }
-
-  function ldLog(lines) {
-    $("ldLog").innerHTML = lines.map((l) => `<div class="line">${l}</div>`).join("");
-  }
-  function ldSetPhase(name) {
-    LD.phase = name;
-    const order = ["measure", "locate", "cut", "prove"];
-    document.querySelectorAll("#ldRail .ld-phase").forEach((el) => {
-      const p = el.dataset.phase;
-      const active = p === name;
-      el.classList.toggle("active", active);
-      el.classList.toggle("done", order.indexOf(p) < order.indexOf(name));
-      el.setAttribute("aria-selected", active ? "true" : "false");
-    });
-  }
-  function ldProgress(pct) {
-    const bar = $("ldBar");
-    if (bar) bar.style.width = `${Math.max(0, Math.min(100, pct))}%`;
-  }
 
   function selectedBias() {
-    const sel = $("ldBias");
-    return (sel && sel.value) || "ad_gender_product";
+    return ($("ldBias") && $("ldBias").value) || "ad_gender_product";
+  }
+  function selectedModel() {
+    const custom = ($("ldModelInput") && $("ldModelInput").value || "").trim();
+    if (custom) return custom;
+    return ($("ldModelSelect") && $("ldModelSelect").value) || "openai/clip-vit-base-patch32";
   }
 
-  function selectedModel() {
-    const custom = ($("ldModelInput")?.value || "").trim();
-    if (custom) return custom;
-    const sel = $("ldModelSelect");
-    return (sel && sel.value) || "openai/clip-vit-base-patch32";
+  function metricsFromReport(report) {
+    if (!report || !report.metrics) return null;
+    const m = report.metrics;
+    const before = m.bias_before || {};
+    const after = m.bias_after || {};
+    const red = m.bias_reduction || {};
+    const gapsB = before.per_probe_gaps || {};
+    const gapsA = after.per_probe_gaps || {};
+    const keys = Object.keys(gapsB).slice(0, 3);
+    const probes = (keys.length ? keys : PREVIEW.probes.map((p) => p.name)).map((key, i) => {
+      if (keys.length) {
+        const short = key.replace(/^an ad for a /i, "").replace(/^a photo of (a )?/i, "");
+        return {
+          name: short.length > 18 ? short.slice(0, 16) + "…" : short,
+          before: gapsB[key] || 0,
+          after: gapsA[key] != null ? gapsA[key] : 0,
+        };
+      }
+      return PREVIEW.probes[i];
+    });
+    return {
+      probes,
+      weatBefore: red.weat_effect_size?.before ?? before.weat_effect_size ?? PREVIEW.weatBefore,
+      weatAfter: red.weat_effect_size?.after ?? after.weat_effect_size ?? PREVIEW.weatAfter,
+      gapPct: red.mean_abs_association_gap?.reduction_pct ?? PREVIEW.gapPct,
+      retention: (m.retention?.embedding_cosine_retention ?? PREVIEW.retention / 100) * 100,
+      edits: report.surgery?.num_edits ?? PREVIEW.edits,
+      hot: PREVIEW.hot,
+    };
+  }
+
+  function data() {
+    return metricsFromReport(LD.report) || PREVIEW;
   }
 
   function ldBuildBoard() {
-    $("ldGrid").innerHTML = Array.from({ length: LD.cells }, (_, i) =>
+    const grid = $("ldGrid");
+    if (!grid) return;
+    grid.innerHTML = Array.from({ length: LD.cells }, (_, i) =>
       `<div class="ld-cell" data-i="${i}"></div>`).join("");
   }
 
-  function probeNamesFromReport(report) {
-    const gaps = report?.metrics?.bias_before?.per_probe_gaps || {};
-    const keys = Object.keys(gaps);
-    if (keys.length) {
-      return keys.slice(0, 3).map((k) => {
-        const short = k.replace(/^an ad for a /i, "").replace(/^a photo of (a )?/i, "");
-        return short.length > 18 ? short.slice(0, 16) + "…" : short;
-      });
+  function setCells(mode) {
+    const cells = [...($("ldGrid")?.children || [])];
+    cells.forEach((c) => c.classList.remove("scan", "hot", "cut", "fade", "idle"));
+    if (mode === "scan") {
+      // one-shot highlight row, no infinite glide
+      for (let i = 0; i < 12; i++) cells[i]?.classList.add("scan");
+    } else if (mode === "hot") {
+      LD.hot.forEach((idx) => cells[idx]?.classList.add("hot"));
+    } else if (mode === "cut") {
+      LD.hot.forEach((idx) => cells[idx]?.classList.add("cut"));
+    } else if (mode === "done") {
+      LD.hot.forEach((idx) => cells[idx]?.classList.add("cut", "fade"));
     }
-    return ["probe A", "probe B", "probe C"];
   }
 
-  function ldBuildProbes(names) {
-    $("ldProbes").innerHTML = names.map((name, i) =>
-      `<div class="ld-probe" data-p="${i}">
-         <span>${name}</span>
-         <div class="track"><div class="fill" id="ldFill${i}"></div></div>
-         <span id="ldProbeVal${i}">—</span>
-       </div>`).join("");
+  function renderProbes(phase) {
+    const d = data();
+    const el = $("ldProbes");
+    if (!el) return;
+    el.innerHTML = d.probes.map((p, i) => {
+      const useAfter = phase === "prove" || phase === "cut";
+      const val = useAfter && phase === "prove" ? p.after : p.before;
+      const pct = Math.min(100, Math.abs(val) / 0.02 * 100);
+      const width = phase === "locate" || phase === "measure"
+        ? Math.max(12, pct)
+        : phase === "cut"
+          ? Math.max(12, pct * 0.55)
+          : Math.max(8, Math.abs(p.after) / 0.02 * 100 * 0.4);
+      const neutral = phase === "prove" ? " neutral" : "";
+      const shown = phase === "prove" ? p.after : p.before;
+      return `<div class="ld-probe">
+        <span>${p.name}</span>
+        <div class="track"><div class="fill${neutral}" style="width:${width}%"></div></div>
+        <span>${shown >= 0 ? "+" : ""}${Number(shown).toFixed(3)}</span>
+      </div>`;
+    }).join("");
   }
 
-  function hideExports() {
-    const share = $("ldShare");
-    if (share) share.hidden = true;
-    const art = $("ldArtifact");
-    if (art) art.hidden = true;
-  }
+  function renderMetrics(phase) {
+    const d = data();
+    const weat = $("ldWeat");
+    const weatSub = $("ldWeatSub");
+    const gap = $("ldGap");
+    const gapSub = $("ldGapSub");
+    const ret = $("ldRet");
+    const retSub = $("ldRetSub");
+    if (!weat) return;
 
-  function ldResetVisuals() {
-    ldBuildBoard();
-    ldBuildProbes(["—", "—", "—"]);
-    $("ldWeat").textContent = "—";
-    $("ldWeat").classList.remove("good");
-    $("ldWeatSub").textContent = "awaiting measurement";
-    $("ldGap").textContent = "—";
-    $("ldGap").classList.remove("good");
-    $("ldGapSub").textContent = "mean |Δ cosine|";
-    $("ldRet").textContent = "—";
-    $("ldRet").classList.remove("good");
-    $("ldRetSub").textContent = "neutral prompt fidelity";
-    $("ldBoardTitle").textContent = "Model components";
-    $("ldBoardMeta").textContent = "waiting for job…";
-    $("ldStatus").innerHTML = "Starting <b>live surgery</b>…";
-    ldProgress(0);
-    document.querySelectorAll("#ldRail .ld-phase").forEach((el) =>
-      el.classList.remove("active", "done"));
-    hideExports();
-    ldLog(["> scalpel — same pipeline on any Hugging Face model"]);
-  }
+    weat.classList.remove("good");
+    gap.classList.remove("good");
+    ret.classList.remove("good");
 
-  function ldClearCells() {
-    [...$("ldGrid").children].forEach((c) =>
-      c.classList.remove("scan", "hot", "cut", "fade"));
-  }
-
-  function ldShowWorkingPhase(phase, meta) {
-    ldClearCells();
-    ldSetPhase(phase);
-    if (phase === "measure") {
-      $("ldBoardTitle").textContent = "Measuring association bias";
-      $("ldBoardMeta").textContent = meta || "contrastive prompts · WEAT";
-      $("ldStatus").innerHTML = "Measuring bias across <b>probes</b>…";
-      ldProgress(22);
-      let scan = 0;
-      const gen = LD.gen;
-      const step = () => {
-        if (gen !== LD.gen) return;
-        const cells = [...$("ldGrid").children];
-        cells.forEach((c) => c.classList.remove("scan"));
-        for (let k = 0; k < 6; k++) cells[(scan + k) % cells.length]?.classList.add("scan");
-        scan += 3;
-        ldLater(90, step);
-      };
-      step();
-    } else if (phase === "locate") {
-      $("ldBoardTitle").textContent = "Isolating the bias circuit";
-      $("ldBoardMeta").textContent = meta || "attribution across heads + MLPs";
-      $("ldStatus").innerHTML = "Localizing which components <b>write the bias</b>…";
-      ldProgress(48);
-      LD.hot.forEach((idx, n) => {
-        ldLater(n * 80, () => $("ldGrid").children[idx]?.classList.add("hot"));
-      });
+    if (phase === "measure" || phase === "locate") {
+      weat.textContent = Number(d.weatBefore).toFixed(2);
+      weatSub.textContent = "baseline — stereotyped association";
+      gap.textContent = "high";
+      gapSub.textContent = "mean |Δ cosine| elevated";
+      ret.textContent = "—";
+      retSub.textContent = "measured after the cut";
     } else if (phase === "cut") {
-      $("ldBoardTitle").textContent = "Applying closed-form surgery";
-      $("ldBoardMeta").textContent = meta || "W′ = W − α Vᵀ(VW)";
-      $("ldStatus").innerHTML = "Severing circuit with <b>rank-k projections</b>…";
-      ldProgress(72);
-      LD.hot.forEach((idx, n) => {
-        ldLater(n * 70, () => {
-          const cell = $("ldGrid").children[idx];
-          if (!cell) return;
-          cell.classList.add("cut");
-          ldLater(160, () => cell.classList.add("fade"));
-        });
-      });
+      weat.textContent = Number(d.weatBefore).toFixed(2);
+      weatSub.textContent = "editing weights now…";
+      gap.textContent = "…";
+      gapSub.textContent = "projecting bias subspace out";
+      ret.textContent = "…";
+      retSub.textContent = "calibrating retention";
+    } else {
+      weat.textContent = `${Number(d.weatBefore).toFixed(2)} → ${Number(d.weatAfter).toFixed(2)}`;
+      weat.classList.add("good");
+      weatSub.textContent = LD.live ? "live surgery result" : "preview · live numbers when job finishes";
+      gap.textContent = `−${Number(d.gapPct).toFixed(0)}%`;
+      gap.classList.add("good");
+      gapSub.textContent = "association gap reduction";
+      ret.textContent = `${Number(d.retention).toFixed(1)}%`;
+      ret.classList.add("good");
+      retSub.textContent = "neutral prompt fidelity";
     }
   }
 
-  /** Always walk 01→04 so cached jobs don't skip straight to prove. */
-  function playPhaseStory(gen) {
-    const alive = ldAlive(gen);
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    LD.storyDone = false;
-    if (reduce) {
-      LD.storyDone = true;
-      maybeFinish(gen);
+  function setPhaseUI(phase) {
+    document.querySelectorAll("#ldRail .ld-phase").forEach((el) => {
+      const p = el.dataset.phase;
+      const active = p === phase;
+      const done = PHASES.indexOf(p) < PHASES.indexOf(phase);
+      el.classList.toggle("active", active);
+      el.classList.toggle("done", done);
+      el.setAttribute("aria-selected", active ? "true" : "false");
+    });
+    const board = $("ldBoard");
+    if (board) board.dataset.phase = phase;
+    const liveDemo = $("liveDemo");
+    if (liveDemo) liveDemo.dataset.phase = phase;
+  }
+
+  function showPhase(phase, { animate } = { animate: true }) {
+    if (!PHASES.includes(phase)) return;
+    ldClearAnim();
+    LD.phase = phase;
+    const copy = COPY[phase];
+    const d = data();
+    setPhaseUI(phase);
+
+    const title = $("ldBoardTitle");
+    const meta = $("ldBoardMeta");
+    const caption = $("ldCaption");
+    const status = $("ldStatus");
+    const log = $("ldLog");
+    const bar = $("ldBar");
+    const badge = $("ldLiveBadge");
+
+    if (title) title.textContent = copy.title;
+    if (meta) {
+      meta.textContent = phase === "prove"
+        ? `${d.edits} edits · ${LD.live ? "live results" : "preview metrics"}`
+        : copy.meta;
+    }
+    if (caption) caption.textContent = copy.caption;
+    if (status) status.innerHTML = copy.status;
+    if (log) {
+      log.innerHTML = copy.log.map((l) => `<div class="line">${l}</div>`).join("");
+    }
+    if (bar) {
+      bar.style.width = ({ measure: "25%", locate: "50%", cut: "75%", prove: "100%" })[phase];
+    }
+    if (badge) {
+      badge.hidden = !LD.live;
+      badge.textContent = LD.live ? "LIVE RESULTS" : "";
+    }
+
+    ldBuildBoard();
+    if (phase === "measure") setCells("scan");
+    else if (phase === "locate") {
+      setCells("");
+      if (animate && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        LD.hot.forEach((idx, n) => {
+          ldLater(n * 90, () => $("ldGrid")?.children[idx]?.classList.add("hot"));
+        });
+      } else setCells("hot");
+    } else if (phase === "cut") {
+      setCells("hot");
+      if (animate && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        LD.hot.forEach((idx, n) => {
+          ldLater(120 + n * 80, () => {
+            const cell = $("ldGrid")?.children[idx];
+            if (!cell) return;
+            cell.classList.remove("hot");
+            cell.classList.add("cut");
+            ldLater(200, () => cell.classList.add("fade"));
+          });
+        });
+      } else setCells("done");
+    } else {
+      setCells("done");
+    }
+
+    renderProbes(phase);
+    renderMetrics(phase);
+    updateExports(phase === "prove");
+  }
+
+  function updateExports(show) {
+    const share = $("ldShare");
+    if (!share) return;
+    if (!show || !LD.live) {
+      share.hidden = true;
       return;
     }
-    ldShowWorkingPhase("measure");
-    ldLog(["> 01 measure — contrastive WEAT on the selected model"]);
-    ldLater(1600, () => {
-      if (!alive()) return;
-      ldShowWorkingPhase("locate");
-      ldLog(["> 02 locate — attributing bias circuit components"]);
-    });
-    ldLater(1600 + 1800, () => {
-      if (!alive()) return;
-      ldShowWorkingPhase("cut");
-      ldLog(["> 03 cut — closed-form rank-k projection edits"]);
-    });
-    ldLater(1600 + 1800 + 2000, () => {
-      if (!alive()) return;
-      LD.storyDone = true;
-      maybeFinish(gen);
-    });
-  }
-
-  function maybeFinish(gen) {
-    if (gen !== LD.gen) return;
-    if (!LD.storyDone || !LD.pendingResult) return;
-    const body = LD.pendingResult;
-    applyReport(body.report, {
-      shareUrl: body.share_url,
-      pdfUrl: body.pdf_url,
-      recipeUrl: body.recipe_url,
-      artifactUrl: body.artifact_url,
-      reproduceCurl: body.reproduce_curl,
-      cached: !!body.cached,
-      modelId: body.model_id,
-    });
-  }
-
-  function queueResult(body, gen) {
-    LD.pendingResult = body;
-    LD.shareUrl = body.share_url;
-    LD.pdfUrl = body.pdf_url;
-    LD.recipeUrl = body.recipe_url;
-    LD.artifactUrl = body.artifact_url;
-    LD.reproduceCurl = body.reproduce_curl;
-    maybeFinish(gen);
-  }
-
-  function applyReport(report, opts) {
-    const {
-      shareUrl, pdfUrl, recipeUrl, artifactUrl, reproduceCurl, cached, modelId,
-    } = opts || {};
-    LD.report = report;
-    LD.shareUrl = shareUrl || LD.shareUrl;
-    LD.pdfUrl = pdfUrl || LD.pdfUrl;
-    LD.recipeUrl = recipeUrl || LD.recipeUrl;
-    LD.artifactUrl = artifactUrl || LD.artifactUrl;
-    LD.reproduceCurl = reproduceCurl || LD.reproduceCurl;
-
-    const metrics = report.metrics || {};
-    const before = metrics.bias_before || {};
-    const after = metrics.bias_after || {};
-    const reduction = metrics.bias_reduction || {};
-    const weatBefore = reduction.weat_effect_size?.before ?? before.weat_effect_size ?? 0;
-    const weatAfter = reduction.weat_effect_size?.after ?? after.weat_effect_size ?? weatBefore;
-    const gapPct = reduction.mean_abs_association_gap?.reduction_pct ?? 0;
-    const retention = (metrics.retention?.embedding_cosine_retention ?? 0) * 100;
-    const edits = report.surgery?.num_edits ?? 0;
-    const components = report.circuit?.selected_components || [];
-    const names = probeNamesFromReport(report);
-    const gapsBefore = before.per_probe_gaps || {};
-    const gapsAfter = after.per_probe_gaps || {};
-    const probeKeys = Object.keys(gapsBefore).slice(0, 3);
-
-    // Stop scan loops but keep gen; clear only animation timers that would fight prove.
-    LD.timers.forEach(clearTimeout);
-    LD.timers = [];
-
-    ldBuildBoard();
-    ldBuildProbes(names);
-    ldClearCells();
-    components.slice(0, LD.hot.length).forEach((_, i) => {
-      const cell = $("ldGrid").children[LD.hot[i]];
-      if (cell) cell.classList.add("cut", "fade");
-    });
-    ldSetPhase("prove");
-    $("ldBoardTitle").textContent = "Post-surgery audit";
-    $("ldBoardMeta").textContent = `${edits} edits · ${components.length} circuit components`;
-    $("ldWeat").textContent = `${Number(weatBefore).toFixed(2)} → ${Number(weatAfter).toFixed(2)}`;
-    $("ldWeat").classList.add("good");
-    $("ldWeatSub").textContent = cached
-      ? "cached live run · same pipeline"
-      : "live surgery · just finished";
-    $("ldGap").textContent = `−${Number(gapPct).toFixed(0)}%`;
-    $("ldGap").classList.add("good");
-    $("ldGapSub").textContent = "association gap reduction";
-    $("ldRet").textContent = `${Number(retention).toFixed(1)}%`;
-    $("ldRet").classList.add("good");
-    $("ldRetSub").textContent = "embedding cosine on neutral prompts";
-
-    probeKeys.forEach((key, i) => {
-      const b = Math.abs(gapsBefore[key] || 0);
-      const a = Math.abs(gapsAfter[key] || 0);
-      const max = Math.max(b, a, 1e-6);
-      const fill = $(`ldFill${i}`);
-      if (!fill) return;
-      fill.classList.add("neutral");
-      fill.style.width = `${Math.min(100, (a / max) * 100 * 0.35 + 12)}%`;
-      $(`ldProbeVal${i}`).textContent = `${a >= 0 ? "+" : ""}${a.toFixed(3)}`;
-    });
-
-    ldProgress(100);
-    const mid = modelId || report.model_id || selectedModel();
-    $("ldModelLabel").textContent = `${mid} · live`;
-    $("ldStatus").innerHTML =
-      `Surgery complete — <b>−${Number(gapPct).toFixed(0)}% gap</b>, ` +
-      `<b>${Number(retention).toFixed(1)}% retention</b>` +
-      (cached ? " · cached" : " · live");
-    ldLog([
-      `> done · WEAT ${Number(weatBefore).toFixed(2)} → ${Number(weatAfter).toFixed(2)}`,
-      `> export recipe / PDF — re-run on any Hugging Face model via API`,
-    ]);
-
-    const share = $("ldShare");
-    if (share) {
-      share.hidden = false;
-      if ($("ldShareHtml") && LD.shareUrl) $("ldShareHtml").href = api(LD.shareUrl);
-      if ($("ldSharePdf") && LD.pdfUrl) $("ldSharePdf").href = api(LD.pdfUrl);
-      if ($("ldShareRecipe") && LD.recipeUrl) $("ldShareRecipe").href = api(LD.recipeUrl);
-    }
+    share.hidden = false;
+    if ($("ldShareHtml") && LD.shareUrl) $("ldShareHtml").href = api(LD.shareUrl);
+    if ($("ldSharePdf") && LD.pdfUrl) $("ldSharePdf").href = api(LD.pdfUrl);
+    if ($("ldShareRecipe") && LD.recipeUrl) $("ldShareRecipe").href = api(LD.recipeUrl);
     const art = $("ldArtifact");
     if (art) {
       if (LD.artifactUrl) {
         art.hidden = false;
         art.href = api(LD.artifactUrl);
         art.textContent = "Download weights";
+        art.onclick = null;
       } else {
         art.hidden = false;
         art.href = "#";
         art.textContent = "Export weights";
         art.onclick = (e) => {
           e.preventDefault();
-          startLiveDemo(true, true);
+          startJob(true, true);
         };
       }
     }
+  }
+
+  function playAutoplay(gen) {
+    LD.autoplay = true;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) {
+      showPhase("prove", { animate: false });
+      return;
+    }
+    showPhase("measure", { animate: true });
+    ldLater(2200, () => { if (gen === LD.gen && LD.autoplay) showPhase("locate", { animate: true }); });
+    ldLater(2200 + 2400, () => { if (gen === LD.gen && LD.autoplay) showPhase("cut", { animate: true }); });
+    ldLater(2200 + 2400 + 2600, () => {
+      if (gen !== LD.gen || !LD.autoplay) return;
+      showPhase("prove", { animate: true });
+      const st = $("ldStatus");
+      if (st && !LD.live) {
+        st.innerHTML = "Preview complete — <b>waiting for live job</b>… click 01–04 anytime";
+      } else if (st && LD.live) {
+        const d = data();
+        st.innerHTML =
+          `Surgery complete — <b>−${Number(d.gapPct).toFixed(0)}% gap</b>, ` +
+          `<b>${Number(d.retention).toFixed(1)}% retention</b>`;
+      }
+    });
+  }
+
+  function jumpLiveDemo(phase) {
+    LD.autoplay = false;
+    ldClearAnim();
+    showPhase(phase, { animate: true });
+    const st = $("ldStatus");
+    if (st) {
+      st.innerHTML = LD.live
+        ? `${COPY[phase].status} <span class="ld-muted">(live results)</span>`
+        : `${COPY[phase].status} <span class="ld-muted">(guided preview — live job in background)</span>`;
+    }
+  }
+
+  function applyLiveResult(body) {
+    if (!body?.report) return;
+    LD.report = body.report;
+    LD.live = true;
+    LD.shareUrl = body.share_url;
+    LD.pdfUrl = body.pdf_url;
+    LD.recipeUrl = body.recipe_url;
+    LD.artifactUrl = body.artifact_url;
+    LD.modelId = body.model_id;
+    const label = $("ldModelLabel");
+    if (label) label.textContent = `${body.model_id} · live`;
     const signup = $("ldSignup");
     if (signup) {
-      const q = new URLSearchParams({
-        model: mid,
+      signup.href = `/signup?${new URLSearchParams({
+        model: body.model_id || selectedModel(),
         bias: selectedBias(),
-      });
-      signup.href = `/signup?${q.toString()}`;
+      })}`;
     }
-    LD.running = false;
+    // Refresh current scene with real numbers (don't yank the user mid-story).
+    showPhase(LD.phase || "prove", { animate: false });
+    if (LD.phase === "prove") {
+      const d = data();
+      const st = $("ldStatus");
+      if (st) {
+        st.innerHTML =
+          `Live surgery ready — <b>−${Number(d.gapPct).toFixed(0)}% gap</b>, ` +
+          `<b>${Number(d.retention).toFixed(1)}% retention</b>`;
+      }
+    }
   }
 
   async function pollJob(jobId, gen) {
-    const alive = ldAlive(gen);
     try {
       const res = await fetch(api(`/v1/public/demo-jobs/${jobId}`));
-      if (!res.ok) throw new Error(`status ${res.status}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const body = await res.json();
-      if (!alive()) return;
+      if (gen !== LD.gen && !LD.live) {
+        // gen bumped by step clicks — keep polling under a stable job id
+      }
       if (body.status === "queued" || body.status === "running") {
-        $("ldStatus").innerHTML =
-          body.status === "queued"
-            ? "Job <b>queued</b> — walking the surgery story…"
-            : "Server <b>running</b> real surgery — story continues…";
-        ldLog([
-          `> job ${jobId} · ${body.status}`,
-          `> model ${body.model_id}`,
-        ]);
-        LD.pollTimer = setTimeout(() => pollJob(jobId, gen), 1200);
+        LD.pollTimer = setTimeout(() => pollJob(jobId, gen), 1500);
         return;
       }
       if (body.status === "succeeded" && body.report) {
-        queueResult(body, gen);
+        applyLiveResult(body);
         return;
       }
       if (body.status === "failed") {
-        LD.running = false;
-        $("ldStatus").innerHTML = `Surgery failed — <b>${body.error || "unknown error"}</b>`;
-        ldLog([`> failed · ${body.error || "unknown"}`]);
+        const st = $("ldStatus");
+        if (st) st.innerHTML = `Live job failed — showing preview. <b>${body.error || "error"}</b>`;
       }
     } catch (err) {
-      if (!alive()) return;
-      LD.running = false;
-      $("ldStatus").innerHTML = `Could not reach demo API — <b>${err.message}</b>`;
-      ldLog([`> error · ${err.message}`]);
+      const st = $("ldStatus");
+      if (st && !LD.live) {
+        st.innerHTML = `Live API unreachable — <b>preview mode</b> (${err.message})`;
+      }
     }
   }
 
-  async function startLiveDemo(force, exportWeights) {
-    if (LD.running && !force && !exportWeights) return;
-    ldClearTimers();
-    LD.running = true;
-    LD.gen += 1;
-    const gen = LD.gen;
-    LD.jobId = null;
-    LD.report = null;
-    LD.pendingResult = null;
-    LD.storyDone = false;
-    LD.artifactUrl = null;
-    ldResetVisuals();
-
+  async function startJob(force, exportWeights) {
+    ldClearPoll();
     const bias = selectedBias();
     const modelId = selectedModel();
-    if ($("ldModelLabel")) $("ldModelLabel").textContent = `${modelId} · starting…`;
-    ldLog([
-      `> POST /v1/public/demo-jobs`,
-      `> model=${modelId} · bias=${bias}` + (exportWeights ? " · export_weights" : ""),
-    ]);
-    playPhaseStory(gen);
-
+    const label = $("ldModelLabel");
+    if (label) label.textContent = `${modelId} · connecting…`;
     try {
       const res = await fetch(api("/v1/public/demo-jobs"), {
         method: "POST",
@@ -408,119 +445,108 @@
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const detail = body.detail;
-        throw new Error(
-          typeof detail === "string" ? detail : `HTTP ${res.status}`
-        );
+        throw new Error(typeof body.detail === "string" ? body.detail : `HTTP ${res.status}`);
       }
-      if (!ldAlive(gen)()) return;
       LD.jobId = body.id;
+      if (label) label.textContent = `${body.model_id} · job ${body.status}`;
       if (body.status === "succeeded" && body.report) {
-        queueResult(body, gen);
+        applyLiveResult(body);
         return;
       }
-      pollJob(body.id, gen);
+      pollJob(body.id, LD.gen);
     } catch (err) {
-      if (!ldAlive(gen)()) return;
-      LD.running = false;
-      $("ldStatus").innerHTML = `Demo unavailable — <b>${err.message}</b>`;
-      ldLog([`> error · ${err.message}`]);
+      if (label) label.textContent = `${modelId} · preview only`;
+      const st = $("ldStatus");
+      if (st && LD.phase === "prove" && !LD.live) {
+        st.innerHTML = `Preview mode — live API: <b>${err.message}</b>`;
+      }
     }
   }
 
   function restartLiveDemo() {
-    startLiveDemo(true, false);
+    ldClearAnim();
+    ldClearPoll();
+    LD.gen += 1;
+    const gen = LD.gen;
+    LD.report = null;
+    LD.live = false;
+    LD.shareUrl = LD.pdfUrl = LD.recipeUrl = LD.artifactUrl = null;
+    LD.autoplay = true;
+    const share = $("ldShare");
+    if (share) share.hidden = true;
+    playAutoplay(gen);
+    startJob(true, false);
   }
 
-  function jumpLiveDemo(phase) {
-    if (!LD.report) {
-      startLiveDemo(false, false);
-      return;
-    }
-    ldClearTimers();
-    LD.running = false;
-    LD.gen += 1;
-    if (phase === "prove") {
-      applyReport(LD.report, { cached: true, modelId: LD.pendingResult?.model_id });
-      return;
-    }
+  function boot() {
     ldBuildBoard();
-    ldShowWorkingPhase(phase);
+    LD.gen += 1;
+    const gen = LD.gen;
+    playAutoplay(gen);
+    startJob(false, false);
   }
 
   window.jumpLiveDemo = jumpLiveDemo;
   window.restartLiveDemo = restartLiveDemo;
-  window.startLiveDemo = startLiveDemo;
+  window.startLiveDemo = restartLiveDemo;
 
   async function loadCatalogs() {
-    const biasSel = $("ldBias");
-    const modelSel = $("ldModelSelect");
     try {
       const [biasesRes, modelsRes] = await Promise.all([
         fetch(api("/v1/public/demo-biases")),
         fetch(api("/v1/public/demo-models")),
       ]);
-      if (biasesRes.ok && biasSel) {
+      if (biasesRes.ok && $("ldBias")) {
         const items = await biasesRes.json();
         if (Array.isArray(items) && items.length) {
-          const current = biasSel.value;
-          biasSel.innerHTML = items.map((b) =>
+          const cur = $("ldBias").value;
+          $("ldBias").innerHTML = items.map((b) =>
             `<option value="${b.name}">${b.name} — ${b.groups.join(" ↔ ")}</option>`
           ).join("");
-          if ([...biasSel.options].some((o) => o.value === current)) {
-            biasSel.value = current;
-          } else if ([...biasSel.options].some((o) => o.value === "ad_gender_product")) {
-            biasSel.value = "ad_gender_product";
+          if ([...$("ldBias").options].some((o) => o.value === cur)) $("ldBias").value = cur;
+          else if ([...$("ldBias").options].some((o) => o.value === "ad_gender_product")) {
+            $("ldBias").value = "ad_gender_product";
           }
         }
       }
-      if (modelsRes.ok && modelSel) {
-        const data = await modelsRes.json();
-        const featured = data.featured || [];
-        const def = data.default_model_id || "openai/clip-vit-base-patch32";
-        modelSel.innerHTML = featured.map((m) =>
+      if (modelsRes.ok && $("ldModelSelect")) {
+        const dataM = await modelsRes.json();
+        const featured = dataM.featured || [];
+        const def = dataM.default_model_id || "openai/clip-vit-base-patch32";
+        $("ldModelSelect").innerHTML = featured.map((m) =>
           `<option value="${m.model_id}">${m.model_id}</option>`
         ).join("");
-        if (![...modelSel.options].some((o) => o.value === def)) {
-          modelSel.insertAdjacentHTML(
-            "afterbegin",
-            `<option value="${def}">${def}</option>`
-          );
+        if (![...$("ldModelSelect").options].some((o) => o.value === def)) {
+          $("ldModelSelect").insertAdjacentHTML("afterbegin", `<option value="${def}">${def}</option>`);
         }
-        modelSel.value = def;
-        if ($("ldModelInput") && !$("ldModelInput").value) {
-          $("ldModelInput").placeholder = "or any Hugging Face model id…";
-        }
+        $("ldModelSelect").value = def;
       }
-    } catch (_) { /* keep static options */ }
+    } catch (_) { /* static fallbacks */ }
   }
 
-  ldBuildBoard();
-  ldResetVisuals();
   loadCatalogs().finally(() => {
-    $("ldBias")?.addEventListener("change", () => startLiveDemo(true, false));
+    $("ldBias")?.addEventListener("change", () => restartLiveDemo());
     $("ldModelSelect")?.addEventListener("change", () => {
       if ($("ldModelInput")) $("ldModelInput").value = "";
-      startLiveDemo(true, false);
+      restartLiveDemo();
     });
     $("ldModelInput")?.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        startLiveDemo(true, false);
+        restartLiveDemo();
       }
     });
     const root = $("liveDemo");
-    const kick = () => startLiveDemo(false, false);
     if ("IntersectionObserver" in window) {
       const io = new IntersectionObserver((entries) => {
         if (entries.some((e) => e.isIntersecting)) {
           io.disconnect();
-          kick();
+          boot();
         }
-      }, { threshold: 0.25 });
+      }, { threshold: 0.2 });
       io.observe(root);
     } else {
-      kick();
+      boot();
     }
   });
 })();

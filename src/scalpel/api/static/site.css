@@ -463,6 +463,14 @@ section.band.band-tight-top { padding-top: clamp(1.5rem, 3vh, 2.25rem); }
   border-radius: 2px;
   padding: 4px 8px;
 }
+.ld-live-badge {
+  font: 700 10px var(--ld-mono);
+  letter-spacing: 0.14em;
+  color: #0a0a0a;
+  background: var(--cloud);
+  border-radius: 2px;
+  padding: 4px 8px;
+}
 .ld-pulse {
   width: 7px;
   height: 7px;
@@ -470,6 +478,20 @@ section.band.band-tight-top { padding-top: clamp(1.5rem, 3vh, 2.25rem); }
   background: var(--cloud);
   animation: pulse 1.4s ease infinite;
 }
+.ld-caption {
+  margin: 0;
+  padding: 12px 16px 0;
+  font-family: var(--serif);
+  font-size: 1.05rem;
+  line-height: 1.45;
+  color: rgba(238, 238, 233, 0.88);
+  max-width: 40rem;
+}
+.ld-muted { color: var(--muted); font-weight: 400; }
+.ld-board[data-phase="measure"] { border-color: rgba(81, 101, 89, 0.45); }
+.ld-board[data-phase="locate"] { border-color: rgba(238, 238, 233, 0.28); }
+.ld-board[data-phase="cut"] { border-color: rgba(238, 238, 233, 0.45); }
+.ld-board[data-phase="prove"] { border-color: rgba(81, 101, 89, 0.7); }
 .ld-model {
   font: 12px var(--ld-mono);
   color: var(--muted);

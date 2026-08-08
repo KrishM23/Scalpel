@@ -56,12 +56,13 @@ __NAV__
 <section class="band pad-x demo-band" id="demo">
   <div class="section-head">
     <div class="kicker">Try it</div>
-    <h2>Run a real surgery. Export it anywhere.</h2>
-    <p>Live edit on any supported Hugging Face model — then share the PDF, recipe, or weights and re-run the same cut on yours.</p>
+    <h2>Watch the surgery, then take the recipe.</h2>
+    <p>A clear Measure → Locate → Cut → Prove walkthrough. Live results fill in when the server finishes — click any step anytime.</p>
   </div>
-  <div class="livedemo" id="liveDemo" aria-label="Live surgery demo">
+  <div class="livedemo" id="liveDemo" data-phase="measure" aria-label="Surgery walkthrough">
     <div class="ld-head">
-      <span class="ld-live"><span class="ld-pulse"></span>LIVE SURGERY</span>
+      <span class="ld-live"><span class="ld-pulse"></span>SURGERY</span>
+      <span class="ld-live-badge" id="ldLiveBadge" hidden>LIVE RESULTS</span>
       <label class="ld-bias-label" for="ldModelSelect">Model</label>
       <select class="ld-bias" id="ldModelSelect" aria-label="Demo model">
         <option value="openai/clip-vit-base-patch32">openai/clip-vit-base-patch32</option>
@@ -76,25 +77,26 @@ __NAV__
         <option value="gender_profession">gender_profession — classic WEAT</option>
       </select>
       <span class="ld-model" id="ldModelLabel">ready</span>
-      <button class="btn btn-ghost ld-replay" type="button" id="ldReplay" onclick="restartLiveDemo()">Run fresh</button>
+      <button class="btn btn-ghost ld-replay" type="button" id="ldReplay" onclick="restartLiveDemo()">Replay</button>
     </div>
+    <p class="ld-caption" id="ldCaption">Ask the model the same questions about different groups. The association gap shows how hard it leans.</p>
     <div class="ld-body">
       <div class="ld-rail" id="ldRail" role="tablist" aria-label="Surgery phases">
         <button type="button" class="ld-phase" role="tab" data-phase="measure" onclick="jumpLiveDemo('measure')">
           <span class="dot"></span>
-          <div><div class="label">01 Measure</div><div class="hint">WEAT on contrastive prompts</div></div>
+          <div><div class="label">01 Measure</div><div class="hint">See the association gap</div></div>
         </button>
         <button type="button" class="ld-phase" role="tab" data-phase="locate" onclick="jumpLiveDemo('locate')">
           <span class="dot"></span>
-          <div><div class="label">02 Locate</div><div class="hint">Attribute heads &amp; MLPs</div></div>
+          <div><div class="label">02 Locate</div><div class="hint">Find the bias circuit</div></div>
         </button>
         <button type="button" class="ld-phase" role="tab" data-phase="cut" onclick="jumpLiveDemo('cut')">
           <span class="dot"></span>
-          <div><div class="label">03 Cut</div><div class="hint">Closed-form weight edits</div></div>
+          <div><div class="label">03 Cut</div><div class="hint">Edit those weights only</div></div>
         </button>
         <button type="button" class="ld-phase" role="tab" data-phase="prove" onclick="jumpLiveDemo('prove')">
           <span class="dot"></span>
-          <div><div class="label">04 Prove</div><div class="hint">Re-measure + retention</div></div>
+          <div><div class="label">04 Prove</div><div class="hint">Bias down, capability kept</div></div>
         </button>
       </div>
       <div class="ld-main">
@@ -106,10 +108,10 @@ __NAV__
           <div class="ld-metric"><div class="k">Retention</div>
             <div class="v" id="ldRet">—</div><div class="s" id="ldRetSub">neutral prompt fidelity</div></div>
         </div>
-        <div class="ld-board">
+        <div class="ld-board" id="ldBoard" data-phase="measure">
           <div class="ld-board-title">
-            <h4 id="ldBoardTitle">Model components</h4>
-            <span id="ldBoardMeta">12 layers · attention + MLP</span>
+            <h4 id="ldBoardTitle">01 · Measure the bias</h4>
+            <span id="ldBoardMeta">Contrastive prompts · WEAT</span>
           </div>
           <div class="ld-grid" id="ldGrid"></div>
           <div class="ld-probes" id="ldProbes"></div>
