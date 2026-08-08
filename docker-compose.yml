@@ -1,4 +1,21 @@
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: scalpel
+      POSTGRES_PASSWORD: scalpel
+      POSTGRES_DB: scalpel
+    ports:
+      - "5432:5432"
+    volumes:
+      - scalpel-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scalpel -d scalpel"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
   scalpel:
     build: .
     ports:
@@ -12,6 +29,8 @@ services:
       SCALPEL_DEVICE: ${SCALPEL_DEVICE:-cpu}
       SCALPEL_ARTIFACT_DIR: /data/artifacts
       SCALPEL_DB_PATH: /data/scalpel.db
+      # Durable signup accounts (Netlify-ready). Override with hosted Neon/Supabase URL in prod.
+      DATABASE_URL: ${DATABASE_URL:-postgresql://scalpel:scalpel@db:5432/scalpel}
       SCALPEL_OPEN_KEYS: ${SCALPEL_OPEN_KEYS:-0}
       SCALPEL_REQUIRE_API_KEYS: ${SCALPEL_REQUIRE_API_KEYS:-1}
       SCALPEL_PUBLIC_SIGNUP: ${SCALPEL_PUBLIC_SIGNUP:-1}
@@ -22,6 +41,9 @@ services:
     volumes:
       - scalpel-data:/data
       - hf-cache:/home/scalpel/.cache/huggingface
+    depends_on:
+      db:
+        condition: service_healthy
     healthcheck:
       test:
         [
@@ -42,4 +64,5 @@ services:
 
 volumes:
   scalpel-data:
+  scalpel-pg:
   hf-cache:

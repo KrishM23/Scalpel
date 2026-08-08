@@ -100,7 +100,10 @@ def _enforce_signup_rate(ip: str, *, limit: int, window_s: int = 3600) -> None:
 def _html_page(name: str, *, replacements: dict[str, str] | None = None) -> HTMLResponse:
     html = (_STATIC / name).read_text()
     html = html.replace("__SCALPEL_VERSION__", scalpel.__version__)
-    for key, value in (replacements or {}).items():
+    reps = dict(replacements or {})
+    if "__API_BASE__" not in reps:
+        reps["__API_BASE__"] = ""
+    for key, value in reps.items():
         html = html.replace(key, value)
     return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
 
@@ -113,7 +116,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.settings = settings
         settings.artifact_dir.mkdir(parents=True, exist_ok=True)
         settings.database_path.parent.mkdir(parents=True, exist_ok=True)
-        app.state.user_store = UserStore(settings.database_path)
+        app.state.user_store = UserStore.open(
+            database_url=settings.database_url,
+            sqlite_path=settings.database_path,
+        )
+        log.info("User store backend: %s", app.state.user_store.backend)
+        if app.state.user_store.backend == "sqlite" and settings.public_signup:
+            log.warning(
+                "Public signup is using SQLite (%s). For Netlify/production, set "
+                "DATABASE_URL to Postgres so accounts persist across deploys.",
+                settings.database_path,
+            )
         app.state.api_keys = parse_key_entries(settings.api_keys)
         app.state.api_keys.update(
             parse_key_entries(app.state.user_store.list_api_key_entries())
@@ -172,9 +185,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/health", tags=["ops"])
     def health() -> dict:
+        store: UserStore = app.state.user_store
         return {
             "status": "ok",
             "version": scalpel.__version__,
+            "users_db": store.backend,
         }
 
     @app.get("/ready", tags=["ops"])
@@ -268,14 +283,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def login_page() -> HTMLResponse:
         return _html_page(
             "auth.html",
-            replacements={"__AUTH_MODE__": "login", "__AUTH_TITLE__": "Log in"},
+            replacements={
+                "__AUTH_MODE__": "login",
+                "__AUTH_TITLE__": "Log in",
+                "__API_BASE__": settings.public_api_url,
+            },
         )
 
     @app.get("/signup", include_in_schema=False)
     def signup_page() -> HTMLResponse:
         return _html_page(
             "auth.html",
-            replacements={"__AUTH_MODE__": "signup", "__AUTH_TITLE__": "Sign up"},
+            replacements={
+                "__AUTH_MODE__": "signup",
+                "__AUTH_TITLE__": "Sign up",
+                "__API_BASE__": settings.public_api_url,
+            },
         )
 
     @app.post("/v1/auth/signup", response_model=AuthResponse, tags=["auth"])

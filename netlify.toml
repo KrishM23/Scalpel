@@ -1,0 +1,14 @@
+# Scalpel marketing site on Netlify.
+# The Python API (signup DB, jobs, console) runs separately with DATABASE_URL.
+
+[build]
+  command = "python scripts/build_netlify.py"
+  publish = "netlify-dist"
+
+[build.environment]
+  # Set in Netlify UI (or here): origin of scalpel serve with Postgres users DB.
+  # SCALPEL_API_ORIGIN = "https://api.yourdomain.com"
+  PYTHON_VERSION = "3.12"
+
+# SPA-style pretty URLs + API proxy are emitted into netlify-dist/_redirects
+# by scripts/build_netlify.py (uses SCALPEL_API_ORIGIN).

@@ -122,6 +122,14 @@ def test_marketing_and_console_pages(client):
 
     assert client.get("/static/favicon.svg").status_code == 200
     assert client.get("/static/site.css").status_code == 200
+    assert client.get("/static/session.js").status_code == 200
+    assert "ScalpelSession" in client.get("/static/session.js").text
+    assert "/static/session.js" in landing.text
+    assert 'id="liveDemo"' in landing.text
+    assert "/static/live-demo.js" in landing.text
+    assert client.get("/static/live-demo.js").status_code == 200
+    assert "startLiveDemo" in client.get("/static/live-demo.js").text
+
 
     console = client.get("/app")
     assert console.status_code == 200
@@ -249,7 +257,13 @@ def test_catalogs(client):
     assert "openai/clip-vit-base-patch32" in featured_ids
     assert "patrickjohncyh/fashion-clip" in featured_ids
     biases = {b["name"] for b in client.get("/v1/biases", headers=HEADERS).json()}
-    assert {"gender_profession", "age_competence", "ethnicity_valence"} <= biases
+    assert {
+        "gender_profession",
+        "age_competence",
+        "ethnicity_valence",
+        "religion_valence",
+        "disability_competence",
+    } <= biases
 
 
 def test_probe_accepts_any_classified_model(client, monkeypatch):
@@ -421,6 +435,7 @@ def test_alerts_for_failed_and_hot_audit(tmp_path, monkeypatch):
 def test_ready_and_health(client):
     health = client.get("/health").json()
     assert health["status"] == "ok"
+    assert health["users_db"] == "sqlite"
     assert "open_keys" not in health
     ready = client.get("/ready")
     assert ready.status_code == 200

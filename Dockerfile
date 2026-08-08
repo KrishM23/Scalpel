@@ -7,7 +7,7 @@ RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/wh
 
 COPY pyproject.toml README.md ./
 COPY src ./src
-RUN pip install --no-cache-dir . \
+RUN pip install --no-cache-dir ".[postgres]" \
     && useradd --create-home --uid 10001 scalpel \
     && mkdir -p /data/artifacts \
     && chown -R scalpel:scalpel /data /app

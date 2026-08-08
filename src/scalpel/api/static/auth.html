@@ -302,7 +302,18 @@
     </div>
   </main>
 
+<script>window.SCALPEL_API_BASE = "__API_BASE__";</script>
 <script>
+const API_BASE = (window.SCALPEL_API_BASE || "").replace(/\/$/, "");
+function apiUrl(path) { return `${API_BASE}${path}`; }
+
+(function redirectIfSignedIn() {
+  const params = new URLSearchParams(location.search);
+  if (params.get("force") === "1") return;
+  const key = (localStorage.getItem("scalpel_key") || "").trim();
+  if (key) location.replace(apiUrl("/app"));
+})();
+
 const mode = document.body.dataset.mode === "signup" ? "signup" : "login";
 const isSignup = mode === "signup";
 
@@ -345,11 +356,14 @@ form.addEventListener("submit", async (e) => {
     body.company = document.getElementById("company").value.trim();
   }
   try {
-    const res = await fetch(isSignup ? "/v1/auth/signup" : "/v1/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    const res = await fetch(
+      apiUrl(isSignup ? "/v1/auth/signup" : "/v1/auth/login"),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       const detail = data.detail;
@@ -365,7 +379,7 @@ form.addEventListener("submit", async (e) => {
     localStorage.setItem("scalpel_tenant", data.tenant || "");
     localStorage.setItem("scalpel_plan", data.plan || "");
     showMsg("Connected. Opening console…", "ok");
-    setTimeout(() => { location.href = "/app"; }, 450);
+    setTimeout(() => { location.href = apiUrl("/app"); }, 450);
   } catch (err) {
     showMsg(err.message || "Something went wrong", "err");
     submit.disabled = false;

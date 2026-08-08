@@ -1,7 +1,7 @@
-"""Persistent workspace accounts (signup / login) backed by SQLite.
+"""Persistent workspace accounts (signup / login).
 
-Each account gets an isolated tenant and a generated API key that is merged
-into the in-memory key map at runtime (and reloaded on process start).
+Backed by SQLite locally, or Postgres when ``DATABASE_URL`` /
+``SCALPEL_DATABASE_URL`` is set (required for durable signup behind Netlify).
 """
 
 from __future__ import annotations
@@ -10,11 +10,13 @@ import hashlib
 import hmac
 import re
 import secrets
-import sqlite3
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
+
+from scalpel.api.dbutil import Db, DbConfig
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
@@ -91,20 +93,28 @@ class UserAccount:
 
 
 class UserStore:
-    def __init__(self, db_path: Path):
-        self.db_path = db_path
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-        with self._connect() as conn:
-            conn.execute(_SCHEMA)
+    def __init__(self, db: Db):
+        self.db = db
+        with self.db.connect() as conn:
+            conn.executescript(_SCHEMA)
 
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL")
-        return conn
+    @classmethod
+    def open(
+        cls,
+        *,
+        database_url: str | None = None,
+        sqlite_path: Path | None = None,
+    ) -> UserStore:
+        path = sqlite_path or Path("artifacts/scalpel.db")
+        config = DbConfig.from_env(database_url=database_url, sqlite_path=path)
+        return cls(Db(config))
+
+    @property
+    def backend(self) -> str:
+        return self.db.config.backend
 
     @staticmethod
-    def _row(row: sqlite3.Row) -> UserAccount:
+    def _row(row: Any) -> UserAccount:
         return UserAccount(
             id=row["id"],
             email=row["email"],
@@ -117,18 +127,17 @@ class UserStore:
         )
 
     def list_api_key_entries(self) -> list[str]:
-        """Return ``tenant:key`` entries for merging into the auth map."""
-        with self._connect() as conn:
+        with self.db.connect() as conn:
             rows = conn.execute("SELECT tenant, api_key FROM users").fetchall()
         return [f"{row['tenant']}:{row['api_key']}" for row in rows]
 
     def list_tenant_plans(self) -> dict[str, str]:
-        with self._connect() as conn:
+        with self.db.connect() as conn:
             rows = conn.execute("SELECT tenant, plan FROM users").fetchall()
         return {row["tenant"]: row["plan"] for row in rows}
 
     def get_by_email(self, email: str) -> UserAccount | None:
-        with self._connect() as conn:
+        with self.db.connect() as conn:
             row = conn.execute(
                 "SELECT * FROM users WHERE email = ?", (email.lower().strip(),)
             ).fetchone()
@@ -163,7 +172,7 @@ class UserStore:
             plan=plan if plan in {"free", "pro", "enterprise"} else "free",
             created_at=_now(),
         )
-        with self._connect() as conn:
+        with self.db.connect() as conn:
             conn.execute(
                 "INSERT INTO users (id, email, password_hash, name, company, tenant,"
                 " api_key, plan, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -182,7 +191,7 @@ class UserStore:
         return account
 
     def authenticate(self, email: str, password: str) -> UserAccount | None:
-        with self._connect() as conn:
+        with self.db.connect() as conn:
             row = conn.execute(
                 "SELECT * FROM users WHERE email = ?", (email.lower().strip(),)
             ).fetchone()

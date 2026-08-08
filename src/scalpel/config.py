@@ -40,6 +40,25 @@ class Settings:
     database_path: Path = field(
         default_factory=lambda: Path(os.environ.get("SCALPEL_DB_PATH", "artifacts/scalpel.db"))
     )
+    # Postgres URL for durable accounts (Neon/Supabase/RDS). When set, signup
+    # users are stored in Postgres; job store still uses database_path (SQLite)
+    # unless you point both at the same operational volume.
+    database_url: str | None = field(
+        default_factory=lambda: (
+            os.environ.get("DATABASE_URL")
+            or os.environ.get("SCALPEL_DATABASE_URL")
+            or None
+        )
+    )
+    # Public origin of this API when the marketing site is hosted separately
+    # (e.g. Netlify). Injected into static auth pages as window.SCALPEL_API_BASE.
+    public_api_url: str = field(
+        default_factory=lambda: (
+            os.environ.get("SCALPEL_PUBLIC_API_URL")
+            or os.environ.get("PUBLIC_API_URL")
+            or ""
+        ).rstrip("/")
+    )
     device: str = field(default_factory=lambda: os.environ.get("SCALPEL_DEVICE", "cpu"))
     max_concurrent_jobs: int = field(
         default_factory=lambda: int(os.environ.get("SCALPEL_MAX_CONCURRENT_JOBS", "1"))

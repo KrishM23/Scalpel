@@ -558,7 +558,7 @@
   <div class="nav">
     <a href="/">Site</a>
     <a href="/docs" target="_blank">OpenAPI Docs</a>
-    <a href="/login">Account</a>
+    <a id="navSignOut" onclick="signOut()">Sign out</a>
     <a onclick="openModal()">New surgery</a>
   </div>
 
@@ -573,6 +573,7 @@
       <div><div class="un" id="userName">Not signed in</div>
            <div class="ue" id="userPlanLine">enter an API key</div></div>
     </div>
+    <button type="button" class="btn ghost" id="signOutBtn" onclick="signOut()" style="width:100%;margin-top:10px">Sign out</button>
   </div>
 </aside>
 
@@ -1065,6 +1066,8 @@ const DEMO_BIASES = [
   { name: "gender_profession", description: "Binary gender vs profession association bias in the text tower (WEAT-style, adapted from Caliskan et al. 2017).", groups: ["male", "female"], num_contrastive_pairs: 48, num_probes: 16 },
   { name: "age_competence", description: "Age vs competence/dependence association bias (WEAT-style age attitude test adapted to CLIP prompts).", groups: ["young", "old"], num_contrastive_pairs: 36, num_probes: 12 },
   { name: "ethnicity_valence", description: "Ethnicity vs positive/negative valence association bias (WEAT attitude test, cf. Caliskan et al. 2017; CLIP audit of Agarwal et al. 2021).", groups: ["white", "Black"], num_contrastive_pairs: 30, num_probes: 12 },
+  { name: "religion_valence", description: "Religion vs positive/negative valence association bias (WEAT-style attitude test adapted to CLIP prompts; Christian vs Muslim).", groups: ["Christian", "Muslim"], num_contrastive_pairs: 30, num_probes: 12 },
+  { name: "disability_competence", description: "Disability vs competence/dependence association bias (WEAT-style ability attitude test adapted to CLIP prompts).", groups: ["nondisabled", "disabled"], num_contrastive_pairs: 36, num_probes: 12 },
 ];
 function demoReport(job) {
   const gaps = {}, gapsAfter = {};
@@ -1294,6 +1297,8 @@ function groupsForBias(biasName) {
   if (biasName?.includes("gender")) return ["male", "female"];
   if (biasName?.includes("age")) return ["young", "old"];
   if (biasName?.includes("ethnicity")) return ["white", "Black"];
+  if (biasName?.includes("religion")) return ["Christian", "Muslim"];
+  if (biasName?.includes("disability")) return ["nondisabled", "disabled"];
   return ["group A", "group B"];
 }
 
@@ -1969,6 +1974,12 @@ $("vizGrid").innerHTML = Array.from({ length: 32 }, (_, i) =>
   `<i class="${[3, 10, 17, 20, 26].includes(i) ? "hot" : ""}"></i>`).join("");
 ldBuildBoard();
 
+function signOut() {
+  ["scalpel_key", "scalpel_user", "scalpel_tenant", "scalpel_plan"].forEach((k) =>
+    localStorage.removeItem(k));
+  location.href = "/";
+}
+
 (function hydrateSession() {
   const params = new URLSearchParams(location.search);
   const fromUrl = (params.get("key") || "").trim();
@@ -1984,10 +1995,26 @@ ldBuildBoard();
     $("userName").textContent = uname;
     $("avatar").textContent = uname.slice(0, 1).toUpperCase();
   }
+  syncAuthChrome();
 })();
+
+function syncAuthChrome() {
+  const signedIn = !!currentKey() || !!(localStorage.getItem("scalpel_user") || "").trim();
+  const btn = $("signOutBtn");
+  const nav = $("navSignOut");
+  if (btn) btn.hidden = !signedIn;
+  if (nav) nav.hidden = !signedIn;
+}
+
 let keyTimer = null;
 function onKeyUpdated() {
   localStorage.setItem("scalpel_key", currentKey());
+  if (!currentKey()) {
+    localStorage.removeItem("scalpel_user");
+    localStorage.removeItem("scalpel_tenant");
+    localStorage.removeItem("scalpel_plan");
+  }
+  syncAuthChrome();
   reportCache.clear();
   jobsData = [];
   loadCatalogs(); loadUsage(); refresh();

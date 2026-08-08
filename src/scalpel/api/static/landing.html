@@ -10,8 +10,23 @@ __HEAD_META__
 __NAV__
 
 <section class="hero">
-  <div class="hero-visual" aria-hidden="true"></div>
-  <div class="cut-line" aria-hidden="true"><i></i></div>
+  <div class="hero-visual" aria-hidden="true">
+    <div class="surgery-stage">
+      <div class="weight-field" id="weightField"></div>
+      <div class="scan-beam"></div>
+      <div class="incision"><span></span></div>
+      <div class="blade">
+        <span class="blade-shaft"></span>
+        <span class="blade-edge"></span>
+        <span class="blade-tip"></span>
+      </div>
+      <div class="surgery-readout">
+        <span class="sr-phase" data-phase="locate">locating circuit</span>
+        <span class="sr-phase" data-phase="cut">rank-one cut</span>
+        <span class="sr-phase" data-phase="clear">bias cleared</span>
+      </div>
+    </div>
+  </div>
   <div class="hero-copy">
     <div class="brand-mark">Scalpel</div>
     <h1 class="headline">Cut bias out of the <em>weights</em>, not the prompt.</h1>
@@ -19,6 +34,80 @@ __NAV__
     <div class="hero-cta">
       <a class="btn btn-solid" href="/signup">Start free workspace</a>
       <a class="btn btn-line" href="/product">See the method</a>
+    </div>
+  </div>
+</section>
+<script>
+(function buildSurgeryField() {
+  const field = document.getElementById("weightField");
+  if (!field) return;
+  const hot = new Set([14, 15, 22, 23, 30, 31, 38, 39, 45, 46]);
+  const cols = 12, rows = 8;
+  const frag = document.createDocumentFragment();
+  for (let i = 0; i < cols * rows; i++) {
+    const cell = document.createElement("i");
+    if (hot.has(i)) cell.className = "hot";
+    frag.appendChild(cell);
+  }
+  field.appendChild(frag);
+})();
+</script>
+
+<section class="band pad-x demo-band" id="demo">
+  <div class="section-head">
+    <div class="kicker">Try it</div>
+    <h2>Watch a surgery play out.</h2>
+    <p>Measure → locate → cut → prove on CLIP. Click any step, or let it autoplay.</p>
+  </div>
+  <div class="livedemo" id="liveDemo" aria-label="Live surgery demo">
+    <div class="ld-head">
+      <span class="ld-live"><span class="ld-pulse"></span>LIVE DEMO</span>
+      <span class="ld-model" id="ldModel">openai/clip-vit-base-patch32 · gender ↔ profession · click 01–04</span>
+      <button class="btn btn-ghost ld-replay" type="button" id="ldReplay" onclick="restartLiveDemo()">Replay</button>
+    </div>
+    <div class="ld-body">
+      <div class="ld-rail" id="ldRail" role="tablist" aria-label="Surgery phases">
+        <button type="button" class="ld-phase" role="tab" data-phase="measure" onclick="jumpLiveDemo('measure')">
+          <span class="dot"></span>
+          <div><div class="label">01 Measure</div><div class="hint">WEAT on contrastive prompts</div></div>
+        </button>
+        <button type="button" class="ld-phase" role="tab" data-phase="locate" onclick="jumpLiveDemo('locate')">
+          <span class="dot"></span>
+          <div><div class="label">02 Locate</div><div class="hint">Attribute heads &amp; MLPs</div></div>
+        </button>
+        <button type="button" class="ld-phase" role="tab" data-phase="cut" onclick="jumpLiveDemo('cut')">
+          <span class="dot"></span>
+          <div><div class="label">03 Cut</div><div class="hint">Closed-form weight edits</div></div>
+        </button>
+        <button type="button" class="ld-phase" role="tab" data-phase="prove" onclick="jumpLiveDemo('prove')">
+          <span class="dot"></span>
+          <div><div class="label">04 Prove</div><div class="hint">Re-measure + retention</div></div>
+        </button>
+      </div>
+      <div class="ld-main">
+        <div class="ld-metrics">
+          <div class="ld-metric"><div class="k">WEAT effect size</div>
+            <div class="v" id="ldWeat">—</div><div class="s" id="ldWeatSub">awaiting measurement</div></div>
+          <div class="ld-metric"><div class="k">Association gap</div>
+            <div class="v" id="ldGap">—</div><div class="s" id="ldGapSub">mean |Δ cosine|</div></div>
+          <div class="ld-metric"><div class="k">Retention</div>
+            <div class="v" id="ldRet">—</div><div class="s" id="ldRetSub">neutral prompt fidelity</div></div>
+        </div>
+        <div class="ld-board">
+          <div class="ld-board-title">
+            <h4 id="ldBoardTitle">Model components</h4>
+            <span id="ldBoardMeta">12 layers · attention + MLP</span>
+          </div>
+          <div class="ld-grid" id="ldGrid"></div>
+          <div class="ld-probes" id="ldProbes"></div>
+        </div>
+        <div class="ld-log" id="ldLog" aria-live="polite"></div>
+      </div>
+    </div>
+    <div class="ld-progress"><i id="ldBar"></i></div>
+    <div class="ld-foot">
+      <div class="status" id="ldStatus">Starting surgery…</div>
+      <a class="btn btn-solid" href="/signup">Run this on your model</a>
     </div>
   </div>
 </section>

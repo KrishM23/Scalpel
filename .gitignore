@@ -8,3 +8,4 @@ demo_out/
 demo_err.log
 .env
 .DS_Store
+netlify-dist/

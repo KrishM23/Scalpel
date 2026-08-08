@@ -28,7 +28,7 @@ def _nav(active: str) -> str:
   <nav class="nav-mid">
         {mid}
   </nav>
-  <div class="nav-actions">
+  <div class="nav-actions" data-auth-slot>
     <a class="btn btn-ghost" href="/app">Console</a>
     <a class="btn btn-line" href="/login">Log in</a>
     <a class="btn btn-solid" href="/signup">Get started</a>
@@ -91,11 +91,35 @@ def render_marketing_page(
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/static/favicon.svg">
 <link rel="stylesheet" href="/static/site.css?v={int((_STATIC / 'site.css').stat().st_mtime)}">"""
+    import os
+
+    reps = dict(replacements or {})
+    api_base = reps.pop(
+        "__API_BASE__",
+        (
+            os.environ.get("SCALPEL_PUBLIC_API_URL")
+            or os.environ.get("PUBLIC_API_URL")
+            or ""
+        ).rstrip("/"),
+    )
+    session_v = int((_STATIC / "session.js").stat().st_mtime)
+    live_demo = _STATIC / "live-demo.js"
+    live_v = int(live_demo.stat().st_mtime) if live_demo.exists() else 0
+    api_boot = (
+        f"<script>window.SCALPEL_API_BASE={api_base!r};</script>\n"
+        f'<script src="/static/session.js?v={session_v}"></script>\n'
+        f'<script src="/static/live-demo.js?v={live_v}"></script>'
+    )
     html = html.replace("__HEAD_META__", og)
     html = html.replace("__NAV__", _nav(active))
     html = html.replace("__FOOTER__", _FOOTER)
+    if "__SESSION_SCRIPT__" in html:
+        html = html.replace("__SESSION_SCRIPT__", api_boot)
+    else:
+        html = html.replace("</body>", f"{api_boot}\n</body>")
     html = html.replace("__SCALPEL_VERSION__", scalpel.__version__)
-    for key, value in (replacements or {}).items():
+    html = html.replace("__API_BASE__", api_base)
+    for key, value in reps.items():
         html = html.replace(key, value)
     return HTMLResponse(
         html,

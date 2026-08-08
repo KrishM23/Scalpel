@@ -118,7 +118,23 @@ Custom bias benchmarks (your own contrastive pairs, probes, retention
 prompts) can be submitted inline in the job payload.
 
 ```bash
-cp .env.example .env && docker compose up   # containerized, persistent /data
+cp .env.example .env && docker compose up   # API + Postgres for durable signup
+```
+
+### Netlify (marketing site) + API host
+
+Netlify serves the static marketing/auth pages. Signup and jobs hit your
+Python API, which **must** use Postgres for accounts:
+
+1. Deploy `scalpel serve` (Railway, Fly, Render, GPU box, or `docker compose`)
+   with `DATABASE_URL=postgresql://…` and `pip install "scalpel-ai[postgres]"`.
+2. In Netlify, set `SCALPEL_API_ORIGIN=https://your-api-host` and deploy.
+   `scripts/build_netlify.py` writes proxies for `/v1/*`, `/app`, `/docs`.
+3. Signups from the Netlify site persist in Postgres via the API.
+
+```bash
+SCALPEL_API_ORIGIN=https://api.yourdomain.com python scripts/build_netlify.py
+# publish netlify-dist/ (or connect the repo; netlify.toml runs the build)
 ```
 
 ## Repository layout
@@ -127,7 +143,8 @@ cp .env.example .env && docker compose up   # containerized, persistent /data
 src/scalpel/
   models/            HF registry + architecture adapters (CLIP / LLM / encoder)
   biases/            benchmark catalog: gender_profession, age_competence,
-                     ethnicity_valence + custom specs
+                     ethnicity_valence, religion_valence, disability_competence
+                     + custom specs
   interpretability/  activation capture, bias subspace, circuit isolation
   editing/           low-rank projection edits, calibrated surgeon
   evaluation/        WEAT/association metrics, retention metrics
