@@ -348,45 +348,44 @@
     }
   }
 
-  function playAutoplay(gen) {
+  // Dwell time on each step before auto-advancing (ms).
+  const DWELL = { measure: 2400, locate: 2600, cut: 2800, prove: 3200 };
+  const CLICK_PAUSE_MS = 4500; // after a manual click, hold then resume autoplay
+
+  function playAutoplay(gen, startAt) {
     LD.autoplay = true;
     ldClearStoryTimers();
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduce) {
-      showPhase("prove", { animate: false });
-      return;
-    }
-    // Chain phases so showPhase() clearing cell timers cannot cancel the next step.
-    const plan = [
-      ["measure", 2200],
-      ["locate", 2400],
-      ["cut", 2600],
-      ["prove", 0],
-    ];
-    function advance(i) {
+    let i = Math.max(0, PHASES.indexOf(startAt || "measure"));
+    if (i < 0) i = 0;
+
+    function advance(idx) {
       if (gen !== LD.gen || !LD.autoplay) return;
-      const [phase, wait] = plan[i];
-      showPhase(phase, { animate: true });
-      if (i >= plan.length - 1) {
-        const st = $("ldStatus");
-        if (st && LD.live) {
+      const phase = PHASES[idx];
+      showPhase(phase, { animate: !reduce });
+      const st = $("ldStatus");
+      if (st) {
+        if (LD.live && phase === "prove") {
           const d = data();
           st.innerHTML =
             `Surgery complete — <b>−${Number(d.gapPct).toFixed(0)}% gap</b>, ` +
-            `<b>${Number(d.retention).toFixed(1)}% retention</b>`;
-        } else if (st) {
-          st.innerHTML = "Walkthrough complete — click <b>01–04</b> anytime" +
-            (LD.jobId ? " · live job still running in background" : "");
+            `<b>${Number(d.retention).toFixed(1)}% retention</b>` +
+            ` <span class="ld-muted">· autoplaying</span>`;
+        } else {
+          st.innerHTML = `${COPY[phase].status} <span class="ld-muted">· autoplaying · click to jump</span>`;
         }
-        return;
       }
-      ldStoryLater(wait, () => advance(i + 1));
+      const wait = reduce ? 0 : DWELL[phase];
+      const next = (idx + 1) % PHASES.length; // loop forever
+      ldStoryLater(wait, () => advance(next));
     }
-    advance(0);
+    advance(i);
   }
 
   function jumpLiveDemo(phase) {
-    // Clicks only change the scene — never touch the API.
+    // Jump immediately, pause the loop briefly, then resume autoplay from here.
+    if (!PHASES.includes(phase)) return;
+    const gen = LD.gen;
     LD.autoplay = false;
     ldClearStoryTimers();
     ldClearCellTimers();
@@ -394,9 +393,15 @@
     const st = $("ldStatus");
     if (st) {
       st.innerHTML = LD.live
-        ? `${COPY[phase].status} <span class="ld-muted">(live results)</span>`
-        : `${COPY[phase].status} <span class="ld-muted">(click any step · live job is separate)</span>`;
+        ? `${COPY[phase].status} <span class="ld-muted">(paused · resumes soon)</span>`
+        : `${COPY[phase].status} <span class="ld-muted">(paused · autoplay resumes)</span>`;
     }
+    ldStoryLater(CLICK_PAUSE_MS, () => {
+      if (gen !== LD.gen) return;
+      // Resume from the next step so we don't re-show the one they just clicked.
+      const next = PHASES[(PHASES.indexOf(phase) + 1) % PHASES.length];
+      playAutoplay(gen, next);
+    });
   }
 
   function applyLiveResult(body) {
