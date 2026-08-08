@@ -474,12 +474,38 @@ section.band.band-tight-top { padding-top: clamp(1.5rem, 3vh, 2.25rem); }
   font: 12px var(--ld-mono);
   color: var(--muted);
   flex: 1;
-  min-width: 160px;
+  min-width: 140px;
+}
+.ld-bias-label {
+  font: 700 10px var(--ld-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.ld-bias,
+.ld-model-input {
+  font: 12px var(--ld-mono);
+  color: var(--cloud);
+  background: var(--bg);
+  border: 1px solid var(--ld-border);
+  border-radius: 2px;
+  padding: 0.4rem 0.55rem;
+  max-width: min(100%, 22rem);
+}
+.ld-model-input {
+  min-width: min(100%, 16rem);
+  flex: 1;
 }
 .ld-replay {
   padding: 0.45rem 0.75rem;
   font-size: 0.75rem;
 }
+.ld-share {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+.ld-share .btn { padding: 0.5rem 0.85rem; font-size: 0.75rem; }
 .ld-body {
   display: grid;
   grid-template-columns: 200px 1fr;

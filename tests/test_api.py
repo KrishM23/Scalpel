@@ -101,6 +101,92 @@ def test_health_is_public(client):
     assert client.get("/health").json()["status"] == "ok"
 
 
+def test_ad_biases_in_catalog(client):
+    names = {b["name"] for b in client.get("/v1/biases", headers=HEADERS).json()}
+    assert "ad_gender_product" in names
+    assert "ad_age_luxury" in names
+    assert "ad_ethnicity_brand" in names
+
+
+def test_public_demo_live_job_pdf_and_share(client):
+    biases = client.get("/v1/public/demo-biases").json()
+    assert any(b["name"] == "ad_gender_product" for b in biases)
+    models = client.get("/v1/public/demo-models").json()
+    assert models["accepts_any_huggingface_id"] is True
+    assert models["default_model_id"]
+
+    created = client.post(
+        "/v1/public/demo-jobs",
+        json={
+            "bias": "ad_gender_product",
+            "model_id": "openai/clip-vit-base-patch32",
+            "force": True,
+        },
+    )
+    assert created.status_code == 202
+    job_id = created.json()["id"]
+
+    deadline = time.time() + 10
+    body = None
+    while time.time() < deadline:
+        body = client.get(f"/v1/public/demo-jobs/{job_id}").json()
+        if body["status"] in ("succeeded", "failed"):
+            break
+        time.sleep(0.05)
+    assert body is not None
+    assert body["status"] == "succeeded"
+    assert body["report"]["metrics"]["bias_reduction"]
+    assert body["share_token"]
+    assert body["pdf_url"].endswith("/pdf")
+    assert body["recipe_url"].endswith("/recipe.json")
+    assert "curl" in (body.get("reproduce_curl") or "")
+
+    # Cached reuse (no force)
+    cached = client.post(
+        "/v1/public/demo-jobs",
+        json={
+            "bias": "ad_gender_product",
+            "model_id": "openai/clip-vit-base-patch32",
+            "force": False,
+        },
+    )
+    assert cached.status_code == 202
+    assert cached.json()["cached"] is True
+    assert cached.json()["id"] == job_id
+
+    html = client.get(body["share_url"])
+    assert html.status_code == 200
+    assert "Scalpel" in html.text
+
+    pdf = client.get(body["pdf_url"])
+    assert pdf.status_code == 200
+    assert pdf.headers["content-type"].startswith("application/pdf")
+    assert pdf.content[:4] == b"%PDF"
+
+    recipe = client.get(body["recipe_url"])
+    assert recipe.status_code == 200
+    assert recipe.json()["kind"] == "surgery_recipe.v1"
+    assert recipe.json()["reproduce"]["any_huggingface_model"] is True
+
+    # Authenticated PDF + share for normal jobs
+    job = _submit(client).json()
+    done = _wait_for_terminal(client, job["id"])
+    assert done["status"] == "succeeded"
+    auth_pdf = client.get(f"/v1/edit-jobs/{job['id']}/report.pdf", headers=HEADERS)
+    assert auth_pdf.status_code == 200
+    assert auth_pdf.content[:4] == b"%PDF"
+    share = client.post(f"/v1/edit-jobs/{job['id']}/share", headers=HEADERS)
+    assert share.status_code == 200
+    assert share.json()["token"]
+    assert share.json()["recipe_url"].endswith("/recipe.json")
+
+
+def test_public_demo_can_be_disabled(tmp_path, monkeypatch):
+    with _make_client(tmp_path, monkeypatch, public_demo_enabled=False) as c:
+        assert c.get("/v1/public/demo-biases").status_code == 404
+        assert c.post("/v1/public/demo-jobs", json={}).status_code == 404
+
+
 def test_marketing_and_console_pages(client):
     landing = client.get("/")
     assert landing.status_code == 200

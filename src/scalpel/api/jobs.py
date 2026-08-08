@@ -26,7 +26,7 @@ from scalpel.biases.catalog import get_bias_spec, spec_from_payload
 from scalpel.config import Settings
 from scalpel.editing.surgeon import SurgeryConfig
 from scalpel.pipelines.debias import run_debias_pipeline
-from scalpel.reporting import render_report_html
+from scalpel.reporting import render_report_html, render_report_pdf
 
 log = logging.getLogger(__name__)
 
@@ -68,6 +68,14 @@ class JobStore:
             conn.execute("ALTER TABLE jobs ADD COLUMN mode TEXT NOT NULL DEFAULT 'edit'")
         if "request_json" not in columns:
             conn.execute("ALTER TABLE jobs ADD COLUMN request_json TEXT")
+        if "share_token" not in columns:
+            conn.execute("ALTER TABLE jobs ADD COLUMN share_token TEXT")
+        if "share_expires_at" not in columns:
+            conn.execute("ALTER TABLE jobs ADD COLUMN share_expires_at TEXT")
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_share_token "
+            "ON jobs(share_token) WHERE share_token IS NOT NULL"
+        )
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path)
@@ -125,6 +133,77 @@ class JobStore:
                 (tenant, limit),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def latest_succeeded(
+        self,
+        tenant: str,
+        bias_name: str,
+        *,
+        max_age_seconds: int,
+        model_id: str | None = None,
+        require_artifact: bool = False,
+    ) -> dict | None:
+        """Most recent succeeded job for tenant+bias(+model) within a TTL window."""
+        cutoff = (
+            datetime.now(timezone.utc) - timedelta(seconds=max_age_seconds)
+        ).isoformat()
+        sql = (
+            "SELECT * FROM jobs WHERE tenant = ? AND bias_name = ? "
+            "AND status = 'succeeded' AND report_json IS NOT NULL "
+            "AND created_at >= ?"
+        )
+        params: list = [tenant, bias_name, cutoff]
+        if model_id:
+            sql += " AND model_id = ?"
+            params.append(model_id)
+        if require_artifact:
+            sql += " AND artifact_dir IS NOT NULL AND artifact_dir != ''"
+        sql += " ORDER BY created_at DESC LIMIT 1"
+        with self._connect() as conn:
+            row = conn.execute(sql, params).fetchone()
+        return dict(row) if row else None
+
+    def get_by_share_token(self, token: str) -> dict | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM jobs WHERE share_token = ?", (token,)
+            ).fetchone()
+        if row is None:
+            return None
+        data = dict(row)
+        expires = data.get("share_expires_at")
+        if expires:
+            try:
+                exp = datetime.fromisoformat(expires.replace("Z", "+00:00"))
+                if exp.tzinfo is None:
+                    exp = exp.replace(tzinfo=timezone.utc)
+                if exp < datetime.now(timezone.utc):
+                    return None
+            except ValueError:
+                return None
+        return data
+
+    def ensure_share_token(self, job_id: str, *, ttl_days: int = 14) -> str | None:
+        """Create or return a share token for a succeeded job with a report."""
+        with self._connect() as conn:
+            row = conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+            if row is None:
+                return None
+            data = dict(row)
+            if data["status"] != "succeeded" or not data.get("report_json"):
+                return None
+            if data.get("share_token"):
+                return data["share_token"]
+            token = uuid.uuid4().hex
+            expires = (
+                datetime.now(timezone.utc) + timedelta(days=ttl_days)
+            ).isoformat()
+            conn.execute(
+                "UPDATE jobs SET share_token = ?, share_expires_at = ?, "
+                "updated_at = ? WHERE id = ?",
+                (token, expires, _now(), job_id),
+            )
+            return token
 
     def list_incomplete(self) -> list[dict]:
         with self._connect() as conn:
@@ -283,8 +362,12 @@ class JobRunner:
 
     @staticmethod
     def _package_artifacts(artifact_path: Path, report: dict) -> None:
-        """Write the HTML compliance report and zip edited weights for download."""
+        """Write HTML/PDF compliance reports and zip edited weights for download."""
         (artifact_path / "report.html").write_text(render_report_html(report))
+        try:
+            (artifact_path / "report.pdf").write_bytes(render_report_pdf(report))
+        except Exception:  # noqa: BLE001 - packaging must not fail the job
+            log.exception("Failed to write report.pdf for %s", artifact_path)
         model_dir = artifact_path / "model"
         if model_dir.is_dir():
             shutil.make_archive(str(artifact_path / "model"), "zip", model_dir)

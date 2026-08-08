@@ -107,6 +107,7 @@ def main() -> int:
                 "",
                 "# Proxy API + console to the Scalpel Python service",
                 f"/v1/*          {api}/v1/:splat     200",
+                f"/r/*           {api}/r/:splat      200",
                 f"/app           {api}/app           200",
                 f"/app/*         {api}/app           200",
                 f"/docs          {api}/docs          200",

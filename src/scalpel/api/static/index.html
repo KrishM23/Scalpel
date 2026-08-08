@@ -1573,7 +1573,11 @@ async function showDetail(id) {
       <div class="track"><div class="fill" style="width:${(Math.abs(v) / maxGap) * 100}%"></div></div>
       <span class="mono">${v.toFixed(4)}</span></div>`;
   }).join("");
-  const actions = [`<button class="btn ghost" onclick="download('/v1/edit-jobs/${id}/report.html', '${id}-report.html')">Compliance report</button>`];
+  const actions = [
+    `<button class="btn ghost" onclick="download('/v1/edit-jobs/${id}/report.html', '${id}-report.html')">HTML report</button>`,
+    `<button class="btn ghost" onclick="download('/v1/edit-jobs/${id}/report.pdf', '${id}-report.pdf')">PDF report</button>`,
+    `<button class="btn ghost" onclick="shareJob('${id}')">Share link</button>`,
+  ];
   if (edit) {
     actions.push(`<button class="btn" onclick="download('/v1/edit-jobs/${id}/artifact', '${id}-model.zip')">Download edited model</button>`);
   }
@@ -1633,6 +1637,22 @@ async function download(path, filename) {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob); a.download = filename; a.click();
   URL.revokeObjectURL(a.href);
+}
+
+async function shareJob(id) {
+  try {
+    const body = await api(`/v1/edit-jobs/${id}/share`, { method: "POST" });
+    const url = new URL(body.share_url, window.location.origin).href;
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(url);
+      toast("Share link copied");
+    } else {
+      toast(url);
+    }
+    window.open(body.pdf_url, "_blank", "noopener");
+  } catch (err) {
+    toast(err.message || "Share failed");
+  }
 }
 
 /* ---------------- live surgery demo (How it works) ---------------- */

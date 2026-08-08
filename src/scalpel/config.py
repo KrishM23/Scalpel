@@ -103,6 +103,29 @@ class Settings:
     signup_rate_limit_per_hour: int = field(
         default_factory=lambda: int(os.environ.get("SCALPEL_SIGNUP_RATE_LIMIT", "10"))
     )
+    # Public landing live-surgery demo (no API key; rate-limited; dedicated tenant).
+    public_demo_enabled: bool = field(
+        default_factory=lambda: _env_bool("SCALPEL_PUBLIC_DEMO", True)
+    )
+    public_demo_tenant: str = field(
+        default_factory=lambda: os.environ.get("SCALPEL_DEMO_TENANT", "public-demo")
+    )
+    public_demo_model: str = field(
+        default_factory=lambda: os.environ.get(
+            "SCALPEL_DEMO_MODEL", "openai/clip-vit-base-patch32"
+        )
+    )
+    public_demo_rate_limit_per_hour: int = field(
+        default_factory=lambda: int(os.environ.get("SCALPEL_DEMO_RATE_LIMIT", "8"))
+    )
+    # Reuse a succeeded demo report for this many seconds (avoids reloading CLIP).
+    public_demo_cache_ttl_seconds: int = field(
+        default_factory=lambda: int(os.environ.get("SCALPEL_DEMO_CACHE_TTL_S", "3600"))
+    )
+    # Share links for HTML/PDF reports (days until expiry).
+    share_ttl_days: int = field(
+        default_factory=lambda: int(os.environ.get("SCALPEL_SHARE_TTL_DAYS", "14"))
+    )
 
 
 def get_settings() -> Settings:

@@ -56,7 +56,11 @@ from scalpel.api.schemas import (
     LoginRequest,
     ModelCatalogResponse,
     ModelProbeResponse,
+    PublicDemoJobResponse,
+    PublicDemoRequest,
+    ShareLinkResponse,
     SignupRequest,
+    SurgeryOptions,
     UsageResponse,
 )
 from scalpel.api.users import UserAccount, UserStore
@@ -68,12 +72,21 @@ from scalpel.models.registry import (
     featured_models,
     probe_model,
 )
-from scalpel.reporting import render_report_html
+from scalpel.reporting import render_report_html, render_report_pdf
 
 log = logging.getLogger("scalpel.api")
 
 _STATIC = Path(__file__).parent / "static"
 _SIGNUP_HITS: dict[str, list[float]] = defaultdict(list)
+_DEMO_HITS: dict[str, list[float]] = defaultdict(list)
+
+# Biases the unauthenticated landing demo may run (ads + classic WEAT).
+_PUBLIC_DEMO_BIASES = (
+    "gender_profession",
+    "ad_gender_product",
+    "ad_age_luxury",
+    "ad_ethnicity_brand",
+)
 
 
 def _client_ip(request: Request) -> str:
@@ -83,18 +96,46 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def _enforce_signup_rate(ip: str, *, limit: int, window_s: int = 3600) -> None:
+def _enforce_rate(
+    hits: dict[str, list[float]],
+    ip: str,
+    *,
+    limit: int,
+    window_s: int = 3600,
+    detail: str,
+) -> None:
     if limit <= 0:
         return
     now = time.time()
-    recent = [t for t in _SIGNUP_HITS[ip] if now - t < window_s]
+    recent = [t for t in hits[ip] if now - t < window_s]
     if len(recent) >= limit:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many signup attempts from this network. Try again later.",
+            detail=detail,
         )
     recent.append(now)
-    _SIGNUP_HITS[ip] = recent
+    hits[ip] = recent
+
+
+def _enforce_signup_rate(ip: str, *, limit: int, window_s: int = 3600) -> None:
+    _enforce_rate(
+        _SIGNUP_HITS,
+        ip,
+        limit=limit,
+        window_s=window_s,
+        detail="Too many signup attempts from this network. Try again later.",
+    )
+
+
+def _enforce_demo_rate(ip: str, *, limit: int, window_s: int = 3600) -> None:
+    _enforce_rate(
+        _DEMO_HITS,
+        ip,
+        limit=limit,
+        window_s=window_s,
+        detail="Too many live demo runs from this network. Try again later, "
+        "or sign up for a workspace.",
+    )
 
 
 def _html_page(name: str, *, replacements: dict[str, str] | None = None) -> HTMLResponse:
@@ -134,6 +175,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.tenant_plans = {
             **settings.tenant_plans,
             **app.state.user_store.list_tenant_plans(),
+            settings.public_demo_tenant: "enterprise",
         }
         if settings.require_api_keys and not app.state.api_keys and not open_keys_enabled():
             log.error(
@@ -512,6 +554,60 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
         return HTMLResponse(render_report_html(json.loads(row["report_json"])))
 
+    @app.get("/v1/edit-jobs/{job_id}/report.pdf", tags=["editing"])
+    def get_edit_job_report_pdf(
+        job_id: str, tenant: str = Depends(require_tenant)
+    ) -> Response:
+        """Shareable PDF compliance report."""
+        row = _get_or_404(job_id, tenant)
+        if not row["report_json"]:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Job is '{row['status']}'; report not available yet",
+            )
+        pdf = render_report_pdf(json.loads(row["report_json"]))
+        return Response(
+            content=pdf,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{job_id}-report.pdf"'
+            },
+        )
+
+    @app.post(
+        "/v1/edit-jobs/{job_id}/share",
+        response_model=ShareLinkResponse,
+        tags=["editing"],
+    )
+    def share_edit_job(
+        job_id: str, tenant: str = Depends(require_tenant)
+    ) -> ShareLinkResponse:
+        """Create a public share link for the HTML + PDF report."""
+        row = _get_or_404(job_id, tenant)
+        if row["status"] != "succeeded" or not row["report_json"]:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Share links are available after the job succeeds",
+            )
+        token = app.state.store.ensure_share_token(
+            job_id, ttl_days=settings.share_ttl_days
+        )
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Could not create share link",
+            )
+        refreshed = app.state.store.get(job_id, tenant) or row
+        has_zip = _has_model_zip(refreshed)
+        return ShareLinkResponse(
+            token=token,
+            share_url=f"/r/{token}",
+            pdf_url=f"/r/{token}/pdf",
+            recipe_url=f"/r/{token}/recipe.json",
+            artifact_url=f"/r/{token}/model.zip" if has_zip else None,
+            expires_at=refreshed.get("share_expires_at"),
+        )
+
     @app.get("/v1/edit-jobs/{job_id}/artifact", tags=["editing"])
     def download_artifact(job_id: str, tenant: str = Depends(require_tenant)):
         """Download the edited model weights as a zip archive."""
@@ -526,6 +622,257 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "or save_artifact=false)",
             )
         return FileResponse(archive, filename=f"{job_id}-model.zip")
+
+    # ——— Public live demo (landing page) ——————————————
+
+    def _has_model_zip(row: dict) -> bool:
+        archive = Path(row.get("artifact_dir") or "") / "model.zip"
+        return archive.is_file()
+
+    def _reproduce_curl(model_id: str, bias_name: str) -> str:
+        return (
+            "curl -X POST \"$API/v1/edit-jobs\" \\\n"
+            '  -H "X-API-Key: $SCALPEL_KEY" \\\n'
+            '  -H "Content-Type: application/json" \\\n'
+            f'  -d \'{{"model_id":"{model_id}","bias":"{bias_name}",'
+            '"mode":"edit","options":{"num_directions":4,"calibrate":true},'
+            '"save_artifact":true}\''
+        )
+
+    def _demo_payload(row: dict, *, cached: bool = False) -> PublicDemoJobResponse:
+        report = json.loads(row["report_json"]) if row.get("report_json") else None
+        token = None
+        if row["status"] == "succeeded" and row.get("report_json"):
+            token = app.state.store.ensure_share_token(
+                row["id"], ttl_days=settings.share_ttl_days
+            )
+        has_zip = _has_model_zip(row)
+        return PublicDemoJobResponse(
+            id=row["id"],
+            status=row["status"],
+            model_id=row["model_id"],
+            bias_name=row["bias_name"],
+            mode=row.get("mode") or "edit",
+            cached=cached,
+            error=row.get("error"),
+            share_token=token,
+            share_url=f"/r/{token}" if token else None,
+            pdf_url=f"/r/{token}/pdf" if token else None,
+            recipe_url=f"/r/{token}/recipe.json" if token else None,
+            artifact_url=(f"/r/{token}/model.zip" if token and has_zip else None),
+            report=report,
+            created_at=row.get("created_at"),
+            reproduce_curl=_reproduce_curl(row["model_id"], row["bias_name"]),
+        )
+
+    @app.get("/v1/public/demo-biases", tags=["public"])
+    def public_demo_biases() -> list[BiasCatalogEntry]:
+        if not settings.public_demo_enabled:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Public live demo is disabled",
+            )
+        catalog = bias_catalog()
+        out: list[BiasCatalogEntry] = []
+        for name in _PUBLIC_DEMO_BIASES:
+            spec = catalog.get(name)
+            if not spec:
+                continue
+            out.append(
+                BiasCatalogEntry(
+                    name=spec.name,
+                    description=spec.description,
+                    groups=[spec.group_a_label, spec.group_b_label],
+                    num_contrastive_pairs=len(spec.paired_prompts),
+                    num_probes=len(spec.probe_set_1) + len(spec.probe_set_2),
+                )
+            )
+        return out
+
+    @app.get("/v1/public/demo-models", tags=["public"])
+    def public_demo_models() -> dict:
+        """Featured models for the live demo — any HF id still accepted on create."""
+        if not settings.public_demo_enabled:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Public live demo is disabled",
+            )
+        featured = [
+            {
+                "model_id": mid,
+                "family": meta.get("family", "unknown"),
+                "description": meta.get("description", ""),
+            }
+            for mid, meta in featured_models().items()
+        ]
+        return {
+            "default_model_id": settings.public_demo_model,
+            "accepts_any_huggingface_id": True,
+            "families": supported_families(),
+            "featured": featured,
+            "note": (
+                "Same Measure→Locate→Cut→Prove pipeline runs on any supported "
+                "Hugging Face architecture. Large LMs may take longer or time out "
+                "on the public demo — sign up for a workspace for production runs."
+            ),
+        }
+
+    @app.post(
+        "/v1/public/demo-jobs",
+        response_model=PublicDemoJobResponse,
+        status_code=status.HTTP_202_ACCEPTED,
+        tags=["public"],
+    )
+    def create_public_demo_job(
+        body: PublicDemoRequest, request: Request
+    ) -> PublicDemoJobResponse:
+        if not settings.public_demo_enabled:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Public live demo is disabled",
+            )
+        bias = body.bias if body.bias in _PUBLIC_DEMO_BIASES else "ad_gender_product"
+        model_id = (body.model_id or settings.public_demo_model).strip()
+        try:
+            probe_model(model_id)
+        except UnsupportedArchitectureError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+            ) from exc
+
+        tenant = settings.public_demo_tenant
+        if not body.force:
+            cached = app.state.store.latest_succeeded(
+                tenant,
+                bias,
+                model_id=model_id,
+                max_age_seconds=settings.public_demo_cache_ttl_seconds,
+                require_artifact=body.export_weights,
+            )
+            if cached and (not body.export_weights or _has_model_zip(cached)):
+                return _demo_payload(cached, cached=True)
+
+        _enforce_demo_rate(
+            _client_ip(request),
+            limit=settings.public_demo_rate_limit_per_hour,
+        )
+        edit_req = EditJobRequest(
+            model_id=model_id,
+            bias=bias,
+            mode="edit",
+            options=SurgeryOptions(num_directions=4, calibrate=True),
+            save_artifact=body.export_weights,
+        )
+        job_id = app.state.store.create(
+            tenant,
+            edit_req.model_id,
+            bias,
+            edit_req.mode,
+            request_json=edit_req.model_dump_json(),
+        )
+        app.state.runner.submit(job_id, tenant, edit_req)
+        row = app.state.store.get(job_id, tenant)
+        assert row is not None
+        return _demo_payload(row, cached=False)
+
+    @app.get(
+        "/v1/public/demo-jobs/{job_id}",
+        response_model=PublicDemoJobResponse,
+        tags=["public"],
+    )
+    def get_public_demo_job(job_id: str) -> PublicDemoJobResponse:
+        if not settings.public_demo_enabled:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+        row = app.state.store.get(job_id, settings.public_demo_tenant)
+        if row is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Demo job not found"
+            )
+        return _demo_payload(row)
+
+    @app.get("/r/{token}", tags=["public"])
+    def shared_report_html(token: str) -> HTMLResponse:
+        row = app.state.store.get_by_share_token(token)
+        if row is None or not row.get("report_json"):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Share link not found or expired",
+            )
+        return HTMLResponse(render_report_html(json.loads(row["report_json"])))
+
+    @app.get("/r/{token}/pdf", tags=["public"])
+    def shared_report_pdf(token: str) -> Response:
+        row = app.state.store.get_by_share_token(token)
+        if row is None or not row.get("report_json"):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Share link not found or expired",
+            )
+        pdf = render_report_pdf(json.loads(row["report_json"]))
+        return Response(
+            content=pdf,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'inline; filename="scalpel-{token[:8]}.pdf"'
+            },
+        )
+
+    @app.get("/r/{token}/recipe.json", tags=["public"])
+    def shared_surgery_recipe(token: str) -> JSONResponse:
+        """Portable surgery recipe — re-run the same edit on any supported model."""
+        row = app.state.store.get_by_share_token(token)
+        if row is None or not row.get("report_json"):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Share link not found or expired",
+            )
+        report = json.loads(row["report_json"])
+        recipe = {
+            "platform": "scalpel",
+            "kind": "surgery_recipe.v1",
+            "model_id": row["model_id"],
+            "bias_name": row["bias_name"],
+            "mode": row.get("mode") or "edit",
+            "options": {
+                "num_directions": report.get("circuit", {}).get("num_directions", 4),
+                "calibrate": True,
+                "max_components": 12,
+                "cumulative_share": 0.8,
+            },
+            "metrics": report.get("metrics"),
+            "circuit": report.get("circuit"),
+            "surgery": report.get("surgery"),
+            "reproduce": {
+                "any_huggingface_model": True,
+                "curl": _reproduce_curl(row["model_id"], row["bias_name"]),
+                "note": (
+                    "Swap model_id for any supported Hugging Face architecture "
+                    "(CLIP, text encoders, GPT-2/Llama/Mistral/Qwen/…). "
+                    "The same Measure→Locate→Cut→Prove pipeline applies."
+                ),
+            },
+        }
+        return JSONResponse(recipe)
+
+    @app.get("/r/{token}/model.zip", tags=["public"])
+    def shared_model_zip(token: str):
+        from fastapi.responses import FileResponse
+
+        row = app.state.store.get_by_share_token(token)
+        if row is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Share link not found or expired",
+            )
+        archive = Path(row.get("artifact_dir") or "") / "model.zip"
+        if not archive.is_file():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No weight export for this share (re-run demo with export)",
+            )
+        return FileResponse(
+            archive, filename=f"scalpel-{row['bias_name']}-model.zip"
+        )
 
     def _get_or_404(job_id: str, tenant: str) -> dict:
         row = app.state.store.get(job_id, tenant)

@@ -137,3 +137,48 @@ class AuthResponse(BaseModel):
     api_key: str
     plan: str
     created_at: str
+
+
+class PublicDemoRequest(BaseModel):
+    """Kick off (or reuse) a public landing-page surgery demo."""
+
+    bias: str = "ad_gender_product"
+    model_id: str | None = Field(
+        default=None,
+        description="Any supported Hugging Face model id (CLIP, text encoder, or LM)",
+    )
+    force: bool = Field(
+        default=False,
+        description="Skip cache and queue a fresh surgery even if a recent report exists",
+    )
+    export_weights: bool = Field(
+        default=False,
+        description="Persist edited weights for download (slower; shareable zip)",
+    )
+
+
+class PublicDemoJobResponse(BaseModel):
+    id: str
+    status: Literal["queued", "running", "succeeded", "failed"]
+    model_id: str
+    bias_name: str
+    mode: Literal["edit", "audit"] = "edit"
+    cached: bool = False
+    error: str | None = None
+    share_token: str | None = None
+    share_url: str | None = None
+    pdf_url: str | None = None
+    recipe_url: str | None = None
+    artifact_url: str | None = None
+    report: dict | None = None
+    created_at: str | None = None
+    reproduce_curl: str | None = None
+
+
+class ShareLinkResponse(BaseModel):
+    token: str
+    share_url: str
+    pdf_url: str
+    recipe_url: str
+    artifact_url: str | None = None
+    expires_at: str | None = None

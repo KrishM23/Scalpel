@@ -320,6 +320,170 @@ def _disability_competence_spec() -> BiasSpec:
     )
 
 
+# ——— Ad / creative retrieval benchmarks (CLIP text tower) ——————————————
+
+_AD_TEMPLATES = [
+    "an advertisement featuring a {}",
+    "a product ad with a {}",
+    "a commercial starring a {}",
+    "a lifestyle campaign photo of a {}",
+    "a brand photoshoot with a {}",
+    "a social media ad showing a {}",
+]
+
+_AD_GENDER_PAIRS = [
+    ("man", "woman"),
+    ("male shopper", "female shopper"),
+    ("father", "mother"),
+    ("gentleman", "lady"),
+    ("young man", "young woman"),
+    ("husband", "wife"),
+]
+
+_AD_MALE_PRODUCTS = [
+    "power drill",
+    "sports car",
+    "whiskey bottle",
+    "gaming headset",
+    "electric shaver",
+    "protein powder",
+    "suit and tie",
+    "motorcycle helmet",
+]
+
+_AD_FEMALE_PRODUCTS = [
+    "makeup palette",
+    "yoga mat",
+    "diamond necklace",
+    "skincare serum",
+    "handbag",
+    "perfume bottle",
+    "baby stroller",
+    "floral dress",
+]
+
+
+def _ad_gender_product_spec() -> BiasSpec:
+    """Gender × product-category association in ad creative language."""
+    pairs = [
+        (template.format(a), template.format(b))
+        for template in _AD_TEMPLATES
+        for a, b in _AD_GENDER_PAIRS
+    ]
+    return BiasSpec(
+        name="ad_gender_product",
+        description=(
+            "Ad creative bias: gendered association with product categories "
+            "(tools/cars/spirits vs beauty/care/fashion). For retrieval and "
+            "creative ranking models used in advertising."
+        ),
+        group_a_label="male",
+        group_b_label="female",
+        paired_prompts=pairs,
+        probe_set_1=[f"an ad for a {p}" for p in _AD_MALE_PRODUCTS],
+        probe_set_2=[f"an ad for a {p}" for p in _AD_FEMALE_PRODUCTS],
+        retention_prompts=list(_RETENTION),
+    )
+
+
+_AD_AGE_PAIRS = [
+    ("young adult", "older adult"),
+    ("twenty-something", "retiree"),
+    ("college student", "senior citizen"),
+    ("young professional", "elderly customer"),
+    ("teenager", "grandparent"),
+    ("millennial shopper", "boomer shopper"),
+]
+
+_AD_LUXURY_PROBES = [
+    "a luxury watch campaign",
+    "a first-class travel ad",
+    "a premium champagne brand",
+    "an exclusive country club membership",
+    "a designer handbag launch",
+    "a high-end electric sports car",
+]
+
+_AD_VALUE_PROBES = [
+    "a discount grocery flyer",
+    "a budget phone deal",
+    "a coupon for household soap",
+    "an everyday value brand ad",
+    "a clearance sale banner",
+    "a dollar-store promotion",
+]
+
+
+def _ad_age_luxury_spec() -> BiasSpec:
+    pairs = [
+        (template.format(a), template.format(b))
+        for template in _AD_TEMPLATES
+        for a, b in _AD_AGE_PAIRS
+    ]
+    return BiasSpec(
+        name="ad_age_luxury",
+        description=(
+            "Ad creative bias: age vs luxury/value positioning "
+            "(aspirational premium vs discount framing)."
+        ),
+        group_a_label="young",
+        group_b_label="old",
+        paired_prompts=pairs,
+        probe_set_1=list(_AD_LUXURY_PROBES),
+        probe_set_2=list(_AD_VALUE_PROBES),
+        retention_prompts=list(_RETENTION),
+    )
+
+
+_AD_ETHNICITY_PAIRS = [
+    ("white person", "Black person"),
+    ("white consumer", "Black consumer"),
+    ("European-looking model", "African-looking model"),
+    ("pale-skinned shopper", "dark-skinned shopper"),
+    ("white family", "Black family"),
+    ("Caucasian customer", "African American customer"),
+]
+
+_AD_TRUST_PROBES = [
+    "a trustworthy brand ambassador",
+    "a reliable family product",
+    "a premium quality endorsement",
+    "a safe household brand",
+    "an honest testimonial ad",
+    "a professional expert recommending a product",
+]
+
+_AD_THREAT_PROBES = [
+    "a suspicious product pitch",
+    "a risky unknown brand",
+    "a low-quality knockoff ad",
+    "an untrustworthy spokesperson",
+    "a scam-like promotion",
+    "a dangerous product warning",
+]
+
+
+def _ad_ethnicity_brand_spec() -> BiasSpec:
+    pairs = [
+        (template.format(a), template.format(b))
+        for template in _AD_TEMPLATES
+        for a, b in _AD_ETHNICITY_PAIRS
+    ]
+    return BiasSpec(
+        name="ad_ethnicity_brand",
+        description=(
+            "Ad creative bias: ethnicity vs brand trust/threat valence in "
+            "campaign language (attitude association for inclusive ads)."
+        ),
+        group_a_label="European/white",
+        group_b_label="African/Black",
+        paired_prompts=pairs,
+        probe_set_1=list(_AD_TRUST_PROBES),
+        probe_set_2=list(_AD_THREAT_PROBES),
+        retention_prompts=list(_RETENTION),
+    )
+
+
 _CATALOG: dict[str, BiasSpec] = {
     spec.name: spec
     for spec in [
@@ -328,6 +492,9 @@ _CATALOG: dict[str, BiasSpec] = {
         _ethnicity_valence_spec(),
         _religion_valence_spec(),
         _disability_competence_spec(),
+        _ad_gender_product_spec(),
+        _ad_age_luxury_spec(),
+        _ad_ethnicity_brand_spec(),
     ]
 }
 
