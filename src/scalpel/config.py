@@ -76,6 +76,14 @@ class Settings:
     require_api_keys: bool = field(
         default_factory=lambda: _env_bool("SCALPEL_REQUIRE_API_KEYS", True)
     )
+    # Consumer signup (workspace accounts). Disable to run key-provisioned only.
+    public_signup: bool = field(
+        default_factory=lambda: _env_bool("SCALPEL_PUBLIC_SIGNUP", True)
+    )
+    # Max signups per client IP per hour (in-memory; resets on process restart).
+    signup_rate_limit_per_hour: int = field(
+        default_factory=lambda: int(os.environ.get("SCALPEL_SIGNUP_RATE_LIMIT", "10"))
+    )
 
 
 def get_settings() -> Settings:

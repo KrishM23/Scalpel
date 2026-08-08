@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+__HEAD_META__
+</head>
+<body>
+<div class="grain" aria-hidden="true"></div>
+__NAV__
+
+<main class="page">
+  <header class="page-hero">
+    <div class="kicker">Developers</div>
+    <h1>Two calls to your first <em>debiased</em> model.</h1>
+    <p class="lede">Authenticate with an API key, queue an edit job, poll for the report. Full OpenAPI at <a href="/docs" style="border-bottom:1px solid rgba(238,238,233,0.3)">/docs</a>.</p>
+    <div class="hero-cta" style="animation:none;margin-top:1.5rem">
+      <a class="btn btn-solid" href="/signup">Get an API key</a>
+      <a class="btn btn-line" href="/docs" target="_blank">OpenAPI docs</a>
+    </div>
+  </header>
+
+  <section class="band" style="padding-top:0;border-top:none">
+    <div class="kicker">1 · Queue a surgery</div>
+    <div class="codeblock">
+      <div class="cbhead"><span>curl</span></div>
+      <pre>curl -X POST https://api.scalpel.ai/v1/edit-jobs \
+  -H <span class="c-s">"X-API-Key: $SCALPEL_KEY"</span> -H <span class="c-s">"Content-Type: application/json"</span> \
+  -d <span class="c-s">'{
+    "model_id": "openai/clip-vit-base-patch32",
+    "bias": "gender_profession",
+    "mode": "edit",
+    "options": { "num_directions": 4, "calibrate": true },
+    "webhook_url": "https://yourapp.com/hooks/scalpel"
+  }'</span>
+<span class="c-c"># → 202 { "id": "job_…", "status": "queued", … }</span></pre>
+    </div>
+
+    <div class="kicker" style="margin-top:2rem">2 · Fetch the report</div>
+    <div class="codeblock">
+      <div class="cbhead"><span>curl</span></div>
+      <pre>curl https://api.scalpel.ai/v1/edit-jobs/$JOB_ID/report \
+  -H <span class="c-s">"X-API-Key: $SCALPEL_KEY"</span>
+
+<span class="c-c"># HTML compliance artifact:
+# GET /v1/edit-jobs/$JOB_ID/report.html</span></pre>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="split">
+      <div class="section-head" style="margin-bottom:0">
+        <div class="kicker">Surface</div>
+        <h2>What you can call</h2>
+      </div>
+      <ul class="feature-list">
+        <li>
+          <div class="idx">API</div>
+          <div>
+            <strong>Jobs &amp; reports</strong>
+            <span><code style="color:var(--cloud)">POST /v1/edit-jobs</code>, status, JSON/HTML reports, optional weight artifacts.</span>
+          </div>
+        </li>
+        <li>
+          <div class="idx">API</div>
+          <div>
+            <strong>Catalog</strong>
+            <span>Featured models, probe any Hugging Face id, built-in bias benchmarks.</span>
+          </div>
+        </li>
+        <li>
+          <div class="idx">API</div>
+          <div>
+            <strong>Ops</strong>
+            <span>Usage &amp; plan limits, workspace alerts, webhooks with optional HMAC.</span>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<section class="cta-band">
+  <h2>Build against a real workspace.</h2>
+  <p>Sign up for a tenant key, or use the console to explore jobs visually first.</p>
+  <div class="hero-cta" style="animation:none">
+    <a class="btn btn-solid" href="/signup">Create account</a>
+    <a class="btn btn-line" href="/app">Open console</a>
+  </div>
+</section>
+
+__FOOTER__
+</body>
+</html>

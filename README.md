@@ -75,7 +75,7 @@ Deliverables per job:
 ```bash
 python3.13 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest                                   # 34 tests, fully offline
+pytest                                   # offline suite (tiny random CLIP)
 
 # Local surgery (recommended flags)
 scalpel debias --model openai/clip-vit-base-patch32 \
@@ -88,16 +88,22 @@ scalpel debias --model openai/clip-vit-base-patch32 --bias ethnicity_valence --a
 ## Running the platform
 
 ```bash
-export SCALPEL_API_KEYS="acme:sk_live_yourkey"
-export SCALPEL_TENANT_PLANS="acme:pro"       # optional; default: enterprise
+cp .env.example .env                     # edit keys / signup settings
+export SCALPEL_API_KEYS="acme:sk_live_yourkey"   # optional if public signup is on
+export SCALPEL_TENANT_PLANS="acme:pro"
 scalpel serve --host 0.0.0.0 --port 8000
 ```
 
-Web console at `/` (job submission, live status, metrics, report/weights
-downloads, plan usage). OpenAPI docs at `/docs`.
+| Path | Surface |
+|---|---|
+| `/` | Marketing site (product, pricing, security, legal) |
+| `/signup` · `/login` | Consumer workspace accounts (free audit plan) |
+| `/app` | Ops console (jobs, alerts, live demo, reports) |
+| `/docs` | OpenAPI |
 
 | Endpoint | Purpose |
 |---|---|
+| `POST /v1/auth/signup` · `/login` | create / authenticate a workspace |
 | `POST /v1/edit-jobs` | queue an audit or edit job (mode, options, webhook) |
 | `GET /v1/edit-jobs` · `/{id}` | tenant-scoped job listing / status |
 | `GET /v1/edit-jobs/{id}/report` | full JSON audit report |
@@ -127,17 +133,19 @@ src/scalpel/
   evaluation/        WEAT/association metrics, retention metrics
   pipelines/         end-to-end audit/edit pipeline
   reporting.py       standalone HTML compliance reports
-  api/               FastAPI app, tenant auth, plans/quotas, durable jobs,
-                     webhooks, web console
-tests/               offline suite (tiny random CLIP), 34 tests
+  api/               FastAPI app, marketing site, signup, plans/quotas,
+                     durable jobs, webhooks, ops console
+tests/               offline suite (tiny random CLIP)
 ```
 
 ## Honest limitations & roadmap
 
 - Association benchmarks are prompt-based; image-grounded audits (zero-shot
   parity on face datasets) are the next evaluation tier.
-- Current surface is CLIP text towers; vision-tower and decoder-LLM editing
-  (ROME-style additive) are registry extensions.
+- Architecture adapters cover CLIP, causal LMs, and text encoders; vision-tower
+  and ROME-style additive LLM edits are next registry extensions.
 - Calibration optimizes the benchmark's own WEAT; a held-out probe split
   guards against overfitting the metric and ships next.
 - Single-node execution; the worker pool swaps for a real queue at scale.
+- Billing upgrades (free → Pro) are sales-assisted today; self-serve checkout
+  is on the roadmap.

@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Scalpel — __AUTH_TITLE__</title>
+<meta name="description" content="Sign in to your Scalpel workspace or create an account for a tenant API key.">
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -257,7 +259,11 @@
       <h1>Bias ops for teams that <em>ship</em> models.</h1>
       <p>One workspace. Tenant-isolated jobs. API keys that plug straight into the console and your pipeline.</p>
     </div>
-    <div class="stage-foot">Surgical editing · audit reports · Hugging Face models</div>
+    <div class="stage-foot">
+      <a href="/product" style="color:inherit">Product</a> ·
+      <a href="/pricing" style="color:inherit">Pricing</a> ·
+      <a href="/security" style="color:inherit">Security</a>
+    </div>
   </aside>
 
   <main class="panel">
@@ -306,7 +312,7 @@ document.getElementById("tabSignup").classList.toggle("active", isSignup);
 document.title = isSignup ? "Scalpel — Sign up" : "Scalpel — Log in";
 document.getElementById("heading").textContent = isSignup ? "Create workspace" : "Welcome back";
 document.getElementById("subcopy").textContent = isSignup
-  ? "We'll provision a tenant and API key for your console."
+  ? "Free audit workspace with a tenant API key for the console."
   : "Enter your credentials to open the console.";
 document.getElementById("submit").textContent = isSignup ? "Create account" : "Log in";
 document.getElementById("password").autocomplete = isSignup ? "new-password" : "current-password";

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scalpel-ai"
-version = "0.3.0"
+version = "0.3.1"
 description = "Scalpel: surgical model editing and bias mitigation platform. Isolates latent bias circuits with mechanistic interpretability and erases them with closed-form rank-one weight edits."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -34,7 +34,7 @@ scalpel = "scalpel.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-scalpel = ["api/static/*.html"]
+scalpel = ["api/static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

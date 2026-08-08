@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+__HEAD_META__
+</head>
+<body>
+<div class="grain" aria-hidden="true"></div>
+__NAV__
+
+<main class="page">
+  <header class="page-hero">
+    <div class="kicker">Legal</div>
+    <h1>Privacy</h1>
+    <p class="lede">How Scalpel handles account and workspace data. Last updated August 5, 2026.</p>
+  </header>
+
+  <div class="legal">
+    <h2>What we collect</h2>
+    <p>When you create a workspace we store your name, email, company name, password hash, tenant identifier, and issued API key. Job metadata (model ids, bias specs, statuses, reports) is stored for your tenant so the console and API can function.</p>
+
+    <h2>How we use it</h2>
+    <p>Account data authenticates you and maps API keys to tenants. Job data runs surgeries, produces audit reports, and enforces plan limits. We do not sell personal information.</p>
+
+    <h2>Models and content</h2>
+    <p>Model identifiers you submit are used to load and edit models for your jobs. Optional weight artifacts remain associated with your tenant. You are responsible for having rights to the models and data you process.</p>
+
+    <h2>Retention</h2>
+    <p>Account and job records persist while your workspace is active. You may request deletion of your account by contacting <a href="mailto:sales@scalpel.ai" style="border-bottom:1px solid rgba(238,238,233,0.3)">sales@scalpel.ai</a>. Self-hosted deployments retain data according to your own infrastructure policies.</p>
+
+    <h2>Security</h2>
+    <p>Passwords are stored with salted PBKDF2 hashes. API access requires a secret key. See <a href="/security" style="border-bottom:1px solid rgba(238,238,233,0.3)">Security</a> for product controls.</p>
+
+    <h2>Contact</h2>
+    <p>Privacy questions: <a href="mailto:sales@scalpel.ai" style="border-bottom:1px solid rgba(238,238,233,0.3)">sales@scalpel.ai</a>.</p>
+  </div>
+</main>
+
+__FOOTER__
+</body>
+</html>

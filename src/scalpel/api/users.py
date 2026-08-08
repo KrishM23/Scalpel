@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS users (
     company TEXT NOT NULL,
     tenant TEXT NOT NULL UNIQUE,
     api_key TEXT NOT NULL UNIQUE,
-    plan TEXT NOT NULL DEFAULT 'pro',
+    plan TEXT NOT NULL DEFAULT 'free',
     created_at TEXT NOT NULL
 );
 """
@@ -141,7 +141,7 @@ class UserStore:
         password: str,
         name: str,
         company: str,
-        plan: str = "pro",
+        plan: str = "free",
     ) -> UserAccount:
         email = email.lower().strip()
         if not email or "@" not in email:
@@ -160,7 +160,7 @@ class UserStore:
             company=company,
             tenant=_slug_tenant(company, email),
             api_key=_issue_api_key(),
-            plan=plan if plan in {"free", "pro", "enterprise"} else "pro",
+            plan=plan if plan in {"free", "pro", "enterprise"} else "free",
             created_at=_now(),
         )
         with self._connect() as conn:

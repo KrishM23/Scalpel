@@ -2,8 +2,11 @@
 
 Public pages:
 - GET  /                          marketing landing
+- GET  /product · /pricing · /developers · /security
+- GET  /privacy · /terms
 - GET  /login · /signup           workspace auth
 - GET  /app                       ops console
+- GET  /static/*                  brand assets + shared CSS
 
 Endpoints (all under /v1, authenticated via X-API-Key or Bearer):
 
@@ -26,18 +29,22 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 import uuid
+from collections import defaultdict
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 
 import scalpel
 from scalpel.api.alerts import collect_alerts
 from scalpel.api.auth import open_keys_enabled, parse_key_entries, require_tenant
 from scalpel.api.jobs import JobRunner, JobStore
+from scalpel.api.marketing import render_marketing_page
 from scalpel.api.plans import plan_for_tenant
 from scalpel.api.schemas import (
     AlertEntry,
@@ -66,6 +73,28 @@ from scalpel.reporting import render_report_html
 log = logging.getLogger("scalpel.api")
 
 _STATIC = Path(__file__).parent / "static"
+_SIGNUP_HITS: dict[str, list[float]] = defaultdict(list)
+
+
+def _client_ip(request: Request) -> str:
+    forwarded = (request.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+    if forwarded:
+        return forwarded
+    return request.client.host if request.client else "unknown"
+
+
+def _enforce_signup_rate(ip: str, *, limit: int, window_s: int = 3600) -> None:
+    if limit <= 0:
+        return
+    now = time.time()
+    recent = [t for t in _SIGNUP_HITS[ip] if now - t < window_s]
+    if len(recent) >= limit:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many signup attempts from this network. Try again later.",
+        )
+    recent.append(now)
+    _SIGNUP_HITS[ip] = recent
 
 
 def _html_page(name: str, *, replacements: dict[str, str] | None = None) -> HTMLResponse:
@@ -146,12 +175,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {
             "status": "ok",
             "version": scalpel.__version__,
-            "open_keys": open_keys_enabled(),
         }
 
     @app.get("/ready", tags=["ops"])
     def ready() -> JSONResponse:
-        """Readiness: DB reachable and auth configured (unless open-keys/dev)."""
+        """Readiness: DB reachable and auth path available."""
         checks: dict[str, str] = {}
         ok = True
         try:
@@ -162,10 +190,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         except Exception as exc:  # noqa: BLE001
             checks["database"] = f"error: {exc}"
             ok = False
+        # Ready when keys exist, open-keys (dev), or public signup can mint keys.
         keys_ok = (
             bool(getattr(app.state, "api_keys", None))
             or open_keys_enabled()
-            or getattr(app.state, "user_store", None) is not None
+            or settings.public_signup
         )
         if settings.require_api_keys and not keys_ok:
             checks["auth"] = "no_api_keys"
@@ -178,7 +207,66 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/", include_in_schema=False)
     def landing() -> HTMLResponse:
-        return _html_page("landing.html")
+        return render_marketing_page(
+            "landing.html",
+            title="Scalpel — Surgical model editing",
+            description=(
+                "Locate latent bias circuits. Erase them with calibrated rank-one "
+                "edits. Ship models that hold up under audit."
+            ),
+        )
+
+    @app.get("/product", include_in_schema=False)
+    def product_page() -> HTMLResponse:
+        return render_marketing_page(
+            "product.html",
+            title="Scalpel — Product",
+            description="Measure, locate, cut, and prove — surgical bias editing for production models.",
+            active="product",
+        )
+
+    @app.get("/pricing", include_in_schema=False)
+    def pricing_page() -> HTMLResponse:
+        return render_marketing_page(
+            "pricing.html",
+            title="Scalpel — Pricing",
+            description="Start with a free audit. Pro and Enterprise plans for full surgical editing.",
+            active="pricing",
+        )
+
+    @app.get("/developers", include_in_schema=False)
+    def developers_page() -> HTMLResponse:
+        return render_marketing_page(
+            "developers.html",
+            title="Scalpel — Developers",
+            description="API quickstart for queuing edit jobs and fetching audit reports.",
+            active="developers",
+        )
+
+    @app.get("/security", include_in_schema=False)
+    def security_page() -> HTMLResponse:
+        return render_marketing_page(
+            "security.html",
+            title="Scalpel — Security",
+            description="Tenant isolation, API authentication, and compliance artifacts.",
+            active="security",
+        )
+
+    @app.get("/privacy", include_in_schema=False)
+    def privacy_page() -> HTMLResponse:
+        return render_marketing_page(
+            "privacy.html",
+            title="Scalpel — Privacy",
+            description="How Scalpel handles account and workspace data.",
+        )
+
+    @app.get("/terms", include_in_schema=False)
+    def terms_page() -> HTMLResponse:
+        return render_marketing_page(
+            "terms.html",
+            title="Scalpel — Terms",
+            description="Terms of service for Scalpel’s website, console, and API.",
+        )
 
     @app.get("/app", include_in_schema=False)
     def console() -> HTMLResponse:
@@ -200,7 +288,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     @app.post("/v1/auth/signup", response_model=AuthResponse, tags=["auth"])
-    def signup(body: SignupRequest) -> AuthResponse:
+    def signup(request: Request, body: SignupRequest) -> AuthResponse:
+        if not settings.public_signup:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Public signup is disabled. Request an API key from your admin.",
+            )
+        _enforce_signup_rate(
+            _client_ip(request),
+            limit=settings.signup_rate_limit_per_hour,
+        )
         store: UserStore = app.state.user_store
         try:
             account = store.create(
@@ -208,7 +305,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 password=body.password,
                 name=body.name,
                 company=body.company,
-                plan="pro",
+                plan="free",
             )
         except ValueError as exc:
             raise HTTPException(
@@ -438,4 +535,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             artifact_dir=row["artifact_dir"],
         )
 
+    app.mount("/static", StaticFiles(directory=str(_STATIC)), name="static")
     return app

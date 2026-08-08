@@ -106,6 +106,23 @@ def test_marketing_and_console_pages(client):
     assert landing.status_code == 200
     assert "text/html" in landing.headers["content-type"]
     assert "Cut bias out" in landing.text
+    assert 'href="/pricing"' in landing.text
+    assert "/static/site.css" in landing.text
+
+    for path, needle in [
+        ("/product", "From association gap"),
+        ("/pricing", "Start with a free audit"),
+        ("/developers", "Two calls to your first"),
+        ("/security", "Tenant isolation"),
+        ("/privacy", "What we collect"),
+        ("/terms", "Terms of service"),
+    ]:
+        page = client.get(path)
+        assert page.status_code == 200, path
+        assert needle in page.text, path
+
+    assert client.get("/static/favicon.svg").status_code == 200
+    assert client.get("/static/site.css").status_code == 200
 
     console = client.get("/app")
     assert console.status_code == 200
@@ -132,7 +149,7 @@ def test_signup_login_issues_api_key(client):
     body = created.json()
     assert body["api_key"].startswith("sk_live_")
     assert body["tenant"]
-    assert body["plan"] == "pro"
+    assert body["plan"] == "free"
 
     dup = client.post("/v1/auth/signup", json=payload)
     assert dup.status_code == 400
@@ -150,10 +167,24 @@ def test_signup_login_issues_api_key(client):
     assert logged_in.status_code == 200
     assert logged_in.json()["api_key"] == body["api_key"]
 
-    usage = client.get("/v1/usage", headers={"X-API-Key": body["api_key"]})
+    headers = {"X-API-Key": body["api_key"]}
+    usage = client.get("/v1/usage", headers=headers)
     assert usage.status_code == 200
     assert usage.json()["tenant"] == body["tenant"]
-    assert usage.json()["plan"] == "pro"
+    assert usage.json()["plan"] == "free"
+    assert usage.json()["allows_edit"] is False
+
+    # Free workspaces may audit but not edit.
+    blocked = client.post(
+        "/v1/edit-jobs",
+        headers=headers,
+        json={
+            "model_id": "openai/clip-vit-base-patch32",
+            "bias": "gender_profession",
+            "mode": "edit",
+        },
+    )
+    assert blocked.status_code == 402
 
 
 def test_auth_required(client):
@@ -389,12 +420,44 @@ def test_alerts_for_failed_and_hot_audit(tmp_path, monkeypatch):
 
 
 def test_ready_and_health(client):
-    assert client.get("/health").json()["status"] == "ok"
+    health = client.get("/health").json()
+    assert health["status"] == "ok"
+    assert "open_keys" not in health
     ready = client.get("/ready")
     assert ready.status_code == 200
     assert ready.json()["status"] == "ready"
     assert "X-Request-ID" in ready.headers
     assert ready.headers["X-Content-Type-Options"] == "nosniff"
+
+
+def test_ready_fails_without_auth_path(tmp_path, monkeypatch):
+    monkeypatch.delenv("SCALPEL_OPEN_KEYS", raising=False)
+    with _make_client(
+        tmp_path,
+        monkeypatch,
+        api_keys=[],
+        require_api_keys=True,
+        public_signup=False,
+    ) as client:
+        ready = client.get("/ready")
+        assert ready.status_code == 503
+        body = ready.json()
+        assert body["status"] == "not_ready"
+        assert body["checks"]["auth"] == "no_api_keys"
+
+
+def test_signup_disabled_when_public_signup_off(tmp_path, monkeypatch):
+    with _make_client(tmp_path, monkeypatch, public_signup=False) as client:
+        response = client.post(
+            "/v1/auth/signup",
+            json={
+                "email": "blocked@acme.test",
+                "password": "securepass1",
+                "name": "Blocked",
+                "company": "Acme",
+            },
+        )
+        assert response.status_code == 403
 
 
 def test_rejects_unknown_model_and_bias(client, monkeypatch):
