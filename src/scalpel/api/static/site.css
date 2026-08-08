@@ -461,65 +461,6 @@ section.band.band-tight-top { padding-top: clamp(1.5rem, 3vh, 2.25rem); }
   margin-bottom: 1.75rem;
 }
 
-/* pricing */
-.pricegrid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0;
-  border-top: 1px solid var(--line);
-}
-.price {
-  padding: 2rem var(--col-gap) 2rem 0;
-  border-right: 1px solid var(--line);
-}
-.price:last-child { border-right: none; padding-right: 0; }
-.price + .price { padding-left: var(--col-gap); }
-.price.featured { background: linear-gradient(180deg, rgba(20,51,47,0.35), transparent 70%); }
-.price .tag {
-  font-size: 0.68rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--field);
-  margin-bottom: 0.75rem;
-  font-weight: 500;
-}
-.price h3 {
-  font-family: var(--serif);
-  font-size: 1.65rem;
-  font-weight: 400;
-  margin-bottom: 0.35rem;
-}
-.price .amt {
-  font-family: var(--serif);
-  font-size: 2.4rem;
-  margin-bottom: 0.75rem;
-}
-.price .amt .per {
-  font-family: var(--sans);
-  font-size: 0.85rem;
-  color: var(--muted);
-}
-.price .desc {
-  color: var(--muted);
-  font-weight: 300;
-  font-size: 0.92rem;
-  margin-bottom: 1.25rem;
-  max-width: 28ch;
-}
-.price ul {
-  list-style: none;
-  margin: 0 0 1.5rem;
-  padding: 0;
-}
-.price li {
-  font-size: 0.9rem;
-  color: var(--cloud);
-  padding: 0.35rem 0;
-  border-top: 1px solid var(--line);
-  font-weight: 300;
-}
-.price li.no { color: var(--muted); text-decoration: line-through; text-decoration-color: rgba(138,138,132,0.45); }
-
 /* content lists / prose */
 .split {
   display: grid;
@@ -691,15 +632,15 @@ section.band.band-tight-top { padding-top: clamp(1.5rem, 3vh, 2.25rem); }
 
 @media (max-width: 960px) {
   .nav-mid { display: none; }
-  .steps, .pricegrid, .trust-row, .foot-grid, .split, .console-frame {
+  .steps, .trust-row, .foot-grid, .split, .console-frame {
     grid-template-columns: 1fr;
   }
-  .step, .price, .trust-item {
+  .step, .trust-item {
     border-right: none !important;
     border-bottom: 1px solid var(--line);
     padding: 1.5rem 0 !important;
   }
-  .step:last-child, .price:last-child, .trust-item:last-child { border-bottom: none; }
+  .step:last-child, .trust-item:last-child { border-bottom: none; }
   .proof { grid-template-columns: 1fr; }
   .console-side { display: none; }
 }

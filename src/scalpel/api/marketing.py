@@ -12,7 +12,6 @@ _STATIC = Path(__file__).parent / "static"
 
 _NAV_LINKS = (
     ("product", "/product", "Product"),
-    ("pricing", "/pricing", "Pricing"),
     ("developers", "/developers", "Developers"),
     ("security", "/security", "Security"),
 )
@@ -46,7 +45,6 @@ _FOOTER = """<footer class="site-footer">
     <div>
       <h4>Product</h4>
       <a href="/product">How it works</a>
-      <a href="/pricing">Pricing</a>
       <a href="/developers">Developers</a>
       <a href="/security">Security</a>
     </div>

@@ -106,12 +106,11 @@ def test_marketing_and_console_pages(client):
     assert landing.status_code == 200
     assert "text/html" in landing.headers["content-type"]
     assert "Cut bias out" in landing.text
-    assert 'href="/pricing"' in landing.text
     assert "/static/site.css" in landing.text
+    assert client.get("/pricing").status_code == 404
 
     for path, needle in [
         ("/product", "From association gap"),
-        ("/pricing", "Start with a free audit"),
         ("/developers", "Two calls to your first"),
         ("/security", "Tenant isolation"),
         ("/privacy", "What we collect"),

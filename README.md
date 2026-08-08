@@ -96,7 +96,7 @@ scalpel serve --host 0.0.0.0 --port 8000
 
 | Path | Surface |
 |---|---|
-| `/` | Marketing site (product, pricing, security, legal) |
+| `/` | Marketing site (product, developers, security, legal) |
 | `/signup` · `/login` | Consumer workspace accounts (free audit plan) |
 | `/app` | Ops console (jobs, alerts, live demo, reports) |
 | `/docs` | OpenAPI |

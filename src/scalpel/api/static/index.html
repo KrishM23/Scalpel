@@ -418,30 +418,6 @@
                      color: var(--muted); }
   .benchcard .actions { margin-top: 16px; display: flex; gap: 9px; }
 
-  /* ---------------- pricing ---------------- */
-  .pricegrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 24px; }
-  .price { background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
-           padding: 26px; position: relative; transition: transform .2s, border-color .2s;
-           display: flex; flex-direction: column; }
-  .price:hover { transform: translateY(-3px); }
-  .price.featured { border-color: var(--field); background: #0d1210; }
-  .price .tag { position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
-                background: var(--forest); color: var(--cloud); font: 700 10px var(--mono);
-                letter-spacing: .1em; border-radius: 5px; padding: 3px 10px;
-                border: 1px solid var(--field); text-transform: uppercase; }
-  .price .current { position: absolute; top: 16px; right: 16px; font: 10px var(--mono);
-                    color: var(--cloud); border: 1px solid var(--field); background: var(--forest);
-                    border-radius: 4px; padding: 2px 7px; text-transform: uppercase; }
-  .price h3 { font-size: 15px; }
-  .price .amt { font-size: 34px; font-weight: 800; margin-top: 12px; letter-spacing: -.03em; }
-  .price .amt .per { font-size: 13px; color: var(--muted); font-weight: 500; }
-  .price .desc { font-size: 12.5px; color: var(--muted2); margin-top: 8px; min-height: 36px; }
-  .price ul { list-style: none; padding: 0; margin: 18px 0 22px; display: grid; gap: 9px; }
-  .price li { font-size: 13px; color: var(--muted2); display: flex; gap: 9px; }
-  .price li::before { content: "✓"; color: var(--field); font-weight: 700; }
-  .price li.no { opacity: .45; } .price li.no::before { content: "—"; color: var(--muted); }
-  .price .btn { width: 100%; margin-top: auto; }
-
   /* ---------------- developers ---------------- */
   .codeblock { background: var(--bg2); border: 1px solid var(--border); border-radius: 11px;
                margin-top: 14px; overflow: hidden; }
@@ -571,7 +547,6 @@
   <div class="nav">
     <a data-view="how" onclick="showView('how')">How it works</a>
     <a data-view="benchmarks" onclick="showView('benchmarks')">Benchmarks</a>
-    <a href="/pricing">Pricing</a>
     <a href="/developers">Developers</a>
     <a href="/security">Security</a>
   </div>
@@ -853,61 +828,6 @@
     </div>
   </div>
 
-  <!-- ================= PRICING ================= -->
-  <div class="view" id="view-pricing">
-    <div class="wrap">
-      <div class="fade-up" style="text-align: center; padding-top: 26px">
-        <h1>Simple, usage-based pricing</h1>
-        <div class="subtitle">start with a free audit — pay when you're ready to fix what it finds</div>
-      </div>
-      <div class="pricegrid" id="priceGrid">
-        <div class="price reveal" data-plan="free">
-          <h3>Audit</h3>
-          <div class="amt">$0<span class="per"> /mo</span></div>
-          <div class="desc">Measure your bias exposure and see exactly which components cause it.</div>
-          <ul>
-            <li>10 audit jobs / month</li>
-            <li>All built-in benchmarks</li>
-            <li>Bias circuit localization</li>
-            <li>JSON + HTML audit reports</li>
-            <li class="no">Edited model download</li>
-            <li class="no">Custom benchmarks</li>
-          </ul>
-          <button class="btn ghost" onclick="openModal()">Run a free audit</button>
-        </div>
-        <div class="price featured reveal" data-plan="pro">
-          <div class="tag">Most popular</div>
-          <h3>Pro</h3>
-          <div class="amt">$1,500<span class="per"> /mo</span></div>
-          <div class="desc">Full surgical editing for teams shipping models to production.</div>
-          <ul>
-            <li>100 jobs / month (audit + edit)</li>
-            <li>Calibrated multi-directional surgery</li>
-            <li>Edited weights, drop-in artifacts</li>
-            <li>Custom benchmarks</li>
-            <li>Completion webhooks</li>
-            <li>Email support, 99.5% API SLA</li>
-          </ul>
-          <button class="btn" onclick="toast('Contact sales@scalpel.ai to upgrade')">Upgrade to Pro</button>
-        </div>
-        <div class="price reveal" data-plan="enterprise">
-          <h3>Enterprise</h3>
-          <div class="amt">Custom</div>
-          <div class="desc">Unlimited volume, deployment flexibility, and compliance partnership.</div>
-          <ul>
-            <li>Unlimited jobs</li>
-            <li>VPC / on-prem deployment</li>
-            <li>Custom model onboarding</li>
-            <li>Audit co-review with your GRC team</li>
-            <li>SSO &amp; role-based access (roadmap)</li>
-            <li>Dedicated support, custom SLA</li>
-          </ul>
-          <button class="btn ghost" onclick="toast('Contact sales@scalpel.ai for enterprise')">Talk to sales</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <!-- ================= DEVELOPERS ================= -->
   <div class="view" id="view-developers">
     <div class="wrap">
@@ -1056,9 +976,9 @@ function activeAlerts() {
 }
 
 /* ---------------- views ---------------- */
-const VIEWS = ["overview", "how", "benchmarks", "pricing", "developers"];
+const VIEWS = ["overview", "how", "benchmarks", "developers"];
 const VIEW_PATHS = { overview: "overview", how: "how-it-works", benchmarks: "benchmarks",
-                     pricing: "pricing", developers: "developers" };
+                     developers: "developers" };
 function showView(name) {
   if (!VIEWS.includes(name)) name = "overview";
   VIEWS.forEach(v => $(`view-${v}`).classList.toggle("active", v === name));
@@ -1213,15 +1133,6 @@ async function loadUsage() {
     $("userName").textContent = u.tenant;
     const limit = u.monthly_job_limit === null ? "∞" : u.monthly_job_limit;
     $("userPlanLine").textContent = `${u.plan} · ${u.jobs_this_month}/${limit} jobs`;
-    document.querySelectorAll(".price").forEach(p => {
-      const existing = p.querySelector(".current");
-      if (existing) existing.remove();
-      if (p.dataset.plan === u.plan) {
-        const badge = document.createElement("span");
-        badge.className = "current"; badge.textContent = "current plan";
-        p.appendChild(badge);
-      }
-    });
   } catch (err) {
     $("connDot").classList.remove("on");
     $("connText").textContent = err.message.slice(0, 48) || "invalid key";

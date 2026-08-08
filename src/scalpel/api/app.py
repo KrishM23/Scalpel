@@ -2,7 +2,7 @@
 
 Public pages:
 - GET  /                          marketing landing
-- GET  /product · /pricing · /developers · /security
+- GET  /product · /developers · /security
 - GET  /privacy · /terms
 - GET  /login · /signup           workspace auth
 - GET  /app                       ops console
@@ -223,15 +223,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             title="Scalpel — Product",
             description="Measure, locate, cut, and prove — surgical bias editing for production models.",
             active="product",
-        )
-
-    @app.get("/pricing", include_in_schema=False)
-    def pricing_page() -> HTMLResponse:
-        return render_marketing_page(
-            "pricing.html",
-            title="Scalpel — Pricing",
-            description="Start with a free audit. Pro and Enterprise plans for full surgical editing.",
-            active="pricing",
         )
 
     @app.get("/developers", include_in_schema=False)
