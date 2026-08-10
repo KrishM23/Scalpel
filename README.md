@@ -129,8 +129,12 @@ cp .env.example .env && docker compose up   # API + Postgres for durable signup
 
 ### Netlify (marketing site) + API host
 
-Visitors use **one Netlify URL**. The site is static; `/v1/*`, `/app`, and `/r/*`
-are proxied to your API so live surgery still runs for real.
+**This product is not `www.scalpel.ai`.** That domain is a separate Webflow site
+(surgical tray logistics). GitHub pushes update this repo; the public product
+URL is your **Netlify deploy** (plus an API host for `/v1`, `/docs`, `/app`).
+
+Visitors use **one Netlify URL**. The site is static; `/v1/*`, `/app`, `/docs`,
+and `/r/*` are proxied to your API so live surgery and OpenAPI still work.
 
 1. Deploy `scalpel serve` (Railway, Fly, Render, GPU box, or `docker compose`)
    with `DATABASE_URL=postgresql://…`, `SCALPEL_PUBLIC_DEMO=1`, and

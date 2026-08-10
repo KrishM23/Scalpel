@@ -149,6 +149,11 @@ def _html_page(name: str, *, replacements: dict[str, str] | None = None) -> HTML
         reps["__API_BASE__"] = ""
     for key, value in reps.items():
         html = html.replace(key, value)
+    # Console / auth pages need a same-origin or absolute API base for /docs.
+    if "SCALPEL_API_BASE" not in html and name in {"index.html", "auth.html"}:
+        api_base = reps.get("__API_BASE__", "") or ""
+        boot = f"<script>window.SCALPEL_API_BASE={api_base!r};</script>\n"
+        html = html.replace("</head>", f"{boot}</head>", 1)
     return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
 
 
@@ -325,7 +330,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/app", include_in_schema=False)
     def console() -> HTMLResponse:
         """Ops console. Public HTML; every API call requires a tenant API key."""
-        return _html_page("index.html")
+        return _html_page(
+            "index.html",
+            replacements={"__API_BASE__": settings.public_api_url},
+        )
 
     @app.get("/login", include_in_schema=False)
     def login_page() -> HTMLResponse:

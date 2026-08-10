@@ -221,6 +221,12 @@ def test_marketing_and_console_pages(client):
     assert "/static/session.js" in landing.text
     assert 'id="liveDemo"' in landing.text
     assert "/static/live-demo.js" in landing.text
+
+    console = client.get("/app")
+    assert console.status_code == 200
+    assert 'data-view="developers"' in console.text
+    assert 'data-view="security"' in console.text
+    assert 'id="view-security"' in console.text
     assert client.get("/static/live-demo.js").status_code == 200
     assert "startLiveDemo" in client.get("/static/live-demo.js").text
 

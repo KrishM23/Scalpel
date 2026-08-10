@@ -547,8 +547,8 @@
   <div class="nav">
     <a data-view="how" onclick="showView('how')">How it works</a>
     <a data-view="benchmarks" onclick="showView('benchmarks')">Benchmarks</a>
-    <a href="/developers">Developers</a>
-    <a href="/security">Security</a>
+    <a data-view="developers" onclick="showView('developers')">Developers</a>
+    <a data-view="security" onclick="showView('security')">Security</a>
   </div>
 
   <div class="navsec">Workspace benchmarks</div>
@@ -557,7 +557,7 @@
   <div class="navsec">Platform</div>
   <div class="nav">
     <a href="/">Site</a>
-    <a href="/docs" target="_blank">OpenAPI Docs</a>
+    <a href="/docs" target="_blank" rel="noopener" id="navDocs" onclick="return openApiDocs(event)">OpenAPI Docs</a>
     <a id="navSignOut" onclick="signOut()">Sign out</a>
     <a onclick="openModal()">New surgery</a>
   </div>
@@ -903,6 +903,35 @@ model = CLIPModel.from_pretrained(<span class="c-s">"./model"</span>)</pre>
             </tbody>
           </table>
         </div>
+        <div class="actions" style="margin-top:14px">
+          <button class="btn" onclick="openApiDocs()">Open interactive OpenAPI</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SECURITY ================= -->
+  <div class="view" id="view-security">
+    <div class="wrap">
+      <div class="fade-up">
+        <h1>Security</h1>
+        <div class="subtitle">tenant isolation, keyed APIs, and compliance artifacts on every job</div>
+      </div>
+      <div class="why reveal">
+        <div class="whygrid">
+          <div class="whycard"><div class="ic">01</div><h4>API authentication</h4>
+            <p>Every <span class="mono">/v1</span> request requires <span class="mono">X-API-Key</span> or Bearer auth. Keys map to tenants; comparison is constant-time.</p></div>
+          <div class="whycard"><div class="ic">02</div><h4>Tenant isolation</h4>
+            <p>Jobs, reports, alerts, and usage are scoped to the authenticated tenant. Workspaces cannot list or mutate each other’s data.</p></div>
+          <div class="whycard"><div class="ic">03</div><h4>Audit artifacts</h4>
+            <p>Succeeded jobs produce structured JSON and printable HTML/PDF — circuit, edits, WEAT before/after, retention.</p></div>
+          <div class="whycard"><div class="ic">04</div><h4>Artifact handling</h4>
+            <p>Edited weights are optional (<span class="mono">save_artifact</span>). When enabled, downloads are keyed to the owning tenant only.</p></div>
+          <div class="whycard"><div class="ic">05</div><h4>Transport &amp; headers</h4>
+            <p>Security headers on responses, request IDs for support, configurable CORS, optional webhook HMAC signing.</p></div>
+          <div class="whycard"><div class="ic">06</div><h4>Operations</h4>
+            <p><span class="mono">/health</span> and <span class="mono">/ready</span> for load balancers. Stale job reaping and recovery after process restart.</p></div>
+        </div>
       </div>
     </div>
   </div>
@@ -977,9 +1006,38 @@ function activeAlerts() {
 }
 
 /* ---------------- views ---------------- */
-const VIEWS = ["overview", "how", "benchmarks", "developers"];
-const VIEW_PATHS = { overview: "overview", how: "how-it-works", benchmarks: "benchmarks",
-                     developers: "developers" };
+const VIEWS = ["overview", "how", "benchmarks", "developers", "security"];
+const VIEW_PATHS = {
+  overview: "overview",
+  how: "how-it-works",
+  benchmarks: "benchmarks",
+  developers: "developers",
+  security: "security",
+};
+function docsBase() {
+  return (window.SCALPEL_API_BASE || "").replace(/\/$/, "");
+}
+async function openApiDocs(ev) {
+  if (ev) ev.preventDefault();
+  const base = docsBase();
+  const probes = [
+    { probe: `${base}/openapi.json`, open: `${base}/docs` },
+    { probe: "/openapi.json", open: "/docs" },
+    { probe: `${base}/docs`, open: `${base}/docs` },
+    { probe: "/docs", open: "/docs" },
+  ].filter((c) => c.open);
+  for (const { probe, open } of probes) {
+    try {
+      const res = await fetch(probe, { method: "GET", credentials: "omit" });
+      if (res.ok) {
+        window.open(open, "_blank", "noopener");
+        return false;
+      }
+    } catch (_) { /* try next */ }
+  }
+  toast("OpenAPI needs the API host — set SCALPEL_API_ORIGIN on Netlify, or open /docs on your Scalpel API URL");
+  return false;
+}
 function showView(name) {
   if (!VIEWS.includes(name)) name = "overview";
   VIEWS.forEach(v => $(`view-${v}`).classList.toggle("active", v === name));

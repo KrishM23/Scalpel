@@ -39,7 +39,7 @@ _FOOTER = """<footer class="site-footer">
   <div class="foot-grid">
     <div class="foot-brand">
       <div class="nav-brand"><span></span>Scalpel</div>
-      <p>Surgical model editing for teams that ship under audit.</p>
+      <p>Bias surgery for adtech teams that ship creative models under brand audit.</p>
     </div>
     <div>
       <h4>Product</h4>
@@ -147,19 +147,43 @@ def main() -> int:
     api_base = ""
 
     pages = {
-        "index.html": ("landing.html", "Scalpel — Surgical model editing",
-                       "Locate latent bias circuits. Erase them with calibrated rank-one edits.",
-                       ""),
-        "product.html": ("product.html", "Scalpel — Product",
-                         "Measure, locate, cut, and prove.", "product"),
-        "developers.html": ("developers.html", "Scalpel — Developers",
-                            "API quickstart for edit jobs and audit reports.", "developers"),
-        "security.html": ("security.html", "Scalpel — Security",
-                          "Tenant isolation and compliance artifacts.", "security"),
-        "privacy.html": ("privacy.html", "Scalpel — Privacy",
-                         "How Scalpel handles account data.", ""),
-        "terms.html": ("terms.html", "Scalpel — Terms",
-                       "Terms of service.", ""),
+        "index.html": (
+            "landing.html",
+            "Scalpel — Bias surgery for adtech models",
+            "For adtech and brand-safety teams: measure creative association "
+            "bias in open CLIP, cut it from weights you own, ship a PDF brands accept.",
+            "",
+        ),
+        "product.html": (
+            "product.html",
+            "Scalpel — For adtech & brand safety",
+            "Surgical bias editing for ML and Trust leads who run open creative models.",
+            "product",
+        ),
+        "developers.html": (
+            "developers.html",
+            "Scalpel — Developers",
+            "API quickstart for edit jobs and audit reports.",
+            "developers",
+        ),
+        "security.html": (
+            "security.html",
+            "Scalpel — Security",
+            "Tenant isolation and compliance artifacts.",
+            "security",
+        ),
+        "privacy.html": (
+            "privacy.html",
+            "Scalpel — Privacy",
+            "How Scalpel handles account data.",
+            "",
+        ),
+        "terms.html": (
+            "terms.html",
+            "Scalpel — Terms",
+            "Terms of service.",
+            "",
+        ),
     }
 
     for out_name, (src, title, desc, active) in pages.items():
@@ -181,27 +205,31 @@ def main() -> int:
         if src.exists():
             shutil.copy2(src, out_static / name)
 
-    # Console fallback if /app proxy is misconfigured
+    # Console fallback if /app proxy is misconfigured (static shell only).
     console = STATIC / "index.html"
     if console.exists():
-        (OUT / "app.html").write_text(
-            console.read_text().replace("__SCALPEL_VERSION__", _version())
-        )
+        console_html = console.read_text().replace("__SCALPEL_VERSION__", _version())
+        boot = "<script>window.SCALPEL_API_BASE='';</script>\n"
+        if "SCALPEL_API_BASE" not in console_html:
+            console_html = console_html.replace("</head>", f"{boot}</head>", 1)
+        (OUT / "app.html").write_text(console_html)
 
-    api = API_ORIGIN or "https://YOUR_API_HOST"
-    (OUT / "_redirects").write_text(
-        "\n".join(
+    api = API_ORIGIN
+    redirect_lines = [
+        "# Pretty marketing paths",
+        "/product       /product.html       200",
+        "/developers    /developers.html    200",
+        "/security      /security.html      200",
+        "/privacy       /privacy.html       200",
+        "/terms         /terms.html         200",
+        "/login         /login.html         200",
+        "/signup        /signup.html        200",
+        "",
+    ]
+    if api:
+        redirect_lines.extend(
             [
-                "# Pretty marketing paths",
-                "/product       /product.html       200",
-                "/developers    /developers.html    200",
-                "/security      /security.html      200",
-                "/privacy       /privacy.html       200",
-                "/terms         /terms.html         200",
-                "/login         /login.html         200",
-                "/signup        /signup.html        200",
-                "",
-                "# Proxy API + console + share links to the Scalpel Python service",
+                "# Proxy API + console + OpenAPI to the Scalpel Python service",
                 f"/v1/*          {api}/v1/:splat     200",
                 f"/r/*           {api}/r/:splat      200",
                 f"/app           {api}/app           200",
@@ -215,20 +243,25 @@ def main() -> int:
                 "",
             ]
         )
-    )
+    else:
+        # Static console shell only — OpenAPI / live jobs need SCALPEL_API_ORIGIN.
+        redirect_lines.append("/app           /app.html           200")
+        redirect_lines.append("")
+    (OUT / "_redirects").write_text("\n".join(redirect_lines))
 
     index = OUT / "index.html"
     if not index.is_file() or index.stat().st_size < 100:
         print("ERROR: index.html was not written — publish would 404", file=sys.stderr)
         return 1
 
-    print(f"Wrote {OUT} (API origin for proxies: {api})")
+    print(f"Wrote {OUT} (API origin for proxies: {api or 'UNSET'})")
     print(f"index.html bytes={index.stat().st_size}")
-    if "YOUR_API_HOST" in api:
+    if not api:
         print(
             "WARNING: Set SCALPEL_API_ORIGIN in Netlify env to your FastAPI host "
             "(Postgres DATABASE_URL must be set on that host). "
-            "Without it, live surgery / signup will 404 behind the proxy."
+            "Without it, /docs, live surgery, signup, and the live /app console "
+            "cannot reach the API (static marketing pages still work)."
         )
     return 0
 
