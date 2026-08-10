@@ -28,9 +28,9 @@
     measure: {
       title: "01 · Measure the bias",
       meta: "Contrastive prompts · WEAT effect size",
-      caption: "Ask the model the same questions about different groups. The association gap shows how hard it leans.",
-      status: "Measuring stereotyped associations…",
-      log: ["> measure: 48 contrastive pairs", "> computing WEAT on the text tower…"],
+      caption: "Same creative prompt, different groups. The association gap is what brand reviews catch — gender×product, age×luxury, ethnicity×brand.",
+      status: "Measuring creative association gaps…",
+      log: ["> measure: ad creative contrastive pairs", "> computing WEAT on the text tower…"],
     },
     locate: {
       title: "02 · Locate the circuit",
@@ -49,9 +49,9 @@
     prove: {
       title: "04 · Prove it worked",
       meta: "Re-measure WEAT · retention on neutral prompts",
-      caption: "Bias down, capability retained. Export the report, recipe, or edited weights.",
+      caption: "Bias down, capability retained. Export the PDF, recipe, or edited weights for the brand pack.",
       status: "Verifying bias ↓ and retention…",
-      log: ["> prove: re-run WEAT + retention probes", "> packing compliance artifacts…"],
+      log: ["> prove: re-run WEAT + retention probes", "> packing brand / compliance artifacts…"],
     },
   };
 
@@ -108,7 +108,7 @@
   }
 
   function selectedBias() {
-    return ($("ldBias") && $("ldBias").value) || "global_language_prestige";
+    return ($("ldBias") && $("ldBias").value) || "ad_gender_product";
   }
   function selectedModel() {
     const custom = ($("ldModelInput") && $("ldModelInput").value || "").trim();
@@ -543,8 +543,8 @@
             `<option value="${b.name}">${b.name} — ${b.groups.join(" ↔ ")}</option>`
           ).join("");
           if ([...$("ldBias").options].some((o) => o.value === cur)) $("ldBias").value = cur;
-          else if ([...$("ldBias").options].some((o) => o.value === "global_language_prestige")) {
-            $("ldBias").value = "global_language_prestige";
+          else if ([...$("ldBias").options].some((o) => o.value === "ad_gender_product")) {
+            $("ldBias").value = "ad_gender_product";
           }
         }
       }

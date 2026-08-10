@@ -1,13 +1,19 @@
 # Scalpel — Surgical Model Editing & Bias Mitigation Platform
 
-Scalpel is a B2B enterprise API for automated model editing. Point it at **any
-compatible Hugging Face model id** — CLIP dual-encoders, causal LLMs (Llama,
-Qwen, Mistral, GPT-2, Phi, Gemma, …), or text encoders (BERT, RoBERTa, MPNet).
-It uses mechanistic interpretability to **isolate the latent circuit that
-transports a bias concept**, and applies **closed-form, low-rank projection
-edits** that permanently sever those pathways — no fine-tuning, no gradients,
-fully deterministic, with a compliance-grade audit report and quantified
-commercial-performance retention.
+Scalpel is a B2B API for surgical bias editing on **open weights you host**.
+
+**Primary customer:** ML / Trust & Safety leads at **adtech, brand-safety, and
+creative-intelligence** companies that already run open CLIP (or similar) for
+creative ranking, tagging, or moderation. They buy when a brand escalation
+needs a deployable cut plus a PDF — not a prompt wrapper.
+
+Point it at **any compatible Hugging Face model id** — CLIP dual-encoders,
+causal LLMs (Llama, Qwen, Mistral, GPT-2, Phi, Gemma, …), or text encoders
+(BERT, RoBERTa, MPNet). It uses mechanistic interpretability to **isolate the
+latent circuit that transports a bias concept**, and applies **closed-form,
+low-rank projection edits** that permanently sever those pathways — no
+fine-tuning, no gradients, fully deterministic, with a compliance-grade audit
+report and quantified commercial-performance retention.
 
 ## Live results (openai/clip-vit-base-patch32, laptop CPU)
 

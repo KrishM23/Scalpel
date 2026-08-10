@@ -2,17 +2,20 @@
 
 Land-and-expand is the product: free proves you *need* a cut; paid ships it.
 
-- ``free``       — audit-only. Measure global-divide / ad / WEAT gaps and see
-                   the circuit. You cannot export edited weights. That pain is
-                   intentional: closed APIs never give you a file you can own.
+Primary buyer: ML / Trust & Safety leads at adtech, brand-safety, and creative-
+intelligence companies that already run open CLIP (or similar) for ranking,
+tagging, or moderation. They pay when a brand escalation needs a deployable
+edit plus a PDF — not a prompt wrapper.
+
+- ``free``       — audit-only. Measure ad creative gaps (gender×product,
+                   age×luxury, ethnicity×brand) and see the circuit. You cannot
+                   export edited weights. That pain is intentional.
 - ``pro``        — full Measure→Locate→Cut→Prove, capped monthly volume,
                    shareable PDF/recipe/weight artifacts for models you deploy.
 - ``enterprise`` — unlimited volume, custom contract, multi-market bias packs.
 
-Why teams pay: if you ship retrieval, ads, or chat in more than one market,
-an English-centric or North/South valence gap is a brand, legal, and trust
-risk — and prompt wrappers are not an audit trail. Scalpel edits *your*
-weights so mitigation is not rented from a frontier API.
+Why they pay: closed APIs never give you a file you can version in the ad
+stack. Scalpel edits *your* weights so mitigation is owned, not rented.
 
 Tenants are mapped via SCALPEL_TENANT_PLANS ("acme:pro,beta:free");
 unmapped tenants get SCALPEL_DEFAULT_PLAN (default: enterprise for

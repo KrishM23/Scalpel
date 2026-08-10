@@ -80,15 +80,15 @@ _STATIC = Path(__file__).parent / "static"
 _SIGNUP_HITS: dict[str, list[float]] = defaultdict(list)
 _DEMO_HITS: dict[str, list[float]] = defaultdict(list)
 
-# Biases the unauthenticated landing demo may run (global divide + ads + WEAT).
+# Biases the unauthenticated landing demo may run (ad creative first — primary ICP).
 _PUBLIC_DEMO_BIASES = (
-    "global_language_prestige",
-    "global_name_valence",
-    "global_economic_framing",
     "ad_gender_product",
     "ad_age_luxury",
     "ad_ethnicity_brand",
     "gender_profession",
+    "global_language_prestige",
+    "global_name_valence",
+    "global_economic_framing",
 )
 
 
@@ -269,10 +269,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def landing() -> HTMLResponse:
         return render_marketing_page(
             "landing.html",
-            title="Scalpel — Surgical model editing",
+            title="Scalpel — Bias surgery for adtech models",
             description=(
-                "Locate latent bias circuits. Erase them with calibrated rank-one "
-                "edits. Ship models that hold up under audit."
+                "For adtech and brand-safety teams: measure creative association "
+                "bias in open CLIP, cut it from weights you own, ship a PDF brands accept."
             ),
         )
 
@@ -280,8 +280,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def product_page() -> HTMLResponse:
         return render_marketing_page(
             "product.html",
-            title="Scalpel — Product",
-            description="Measure, locate, cut, and prove — surgical bias editing for production models.",
+            title="Scalpel — For adtech & brand safety",
+            description=(
+                "Surgical bias editing for ML and Trust leads who run open creative "
+                "models — gender×product, age×luxury, ethnicity×brand, with deployable weights."
+            ),
             active="product",
         )
 
@@ -486,10 +489,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
                 detail=(
-                    f"Plan '{plan.name}' is audit-only: you can prove the bias circuit "
-                    "exists, but you cannot ship edited weights. Upgrade to Pro to cut "
-                    "the bias out of a model you control — closed APIs will not do this "
-                    "for you. Resubmit with mode='audit' or upgrade to edit."
+                    f"Plan '{plan.name}' is audit-only: you can prove creative "
+                    "association gaps (e.g. gender×product) and the circuit that "
+                    "causes them, but you cannot ship edited weights. Upgrade to Pro "
+                    "to cut bias out of the open model in your ad stack — closed APIs "
+                    "will not hand you that file. Resubmit with mode='audit' or upgrade."
                 ),
             )
         used = app.state.store.count_jobs_this_month(tenant)
@@ -737,7 +741,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 detail="Public live demo is disabled",
             )
         bias = (
-            body.bias if body.bias in _PUBLIC_DEMO_BIASES else "global_language_prestige"
+            body.bias if body.bias in _PUBLIC_DEMO_BIASES else "ad_gender_product"
         )
         model_id = (body.model_id or settings.public_demo_model).strip()
         try:

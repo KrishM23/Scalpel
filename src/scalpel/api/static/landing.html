@@ -30,10 +30,10 @@ __NAV__
   <div class="hero-copy">
     <div class="brand-mark">Scalpel</div>
     <h1 class="headline">Cut bias out of the <em>weights</em>, not the prompt.</h1>
-    <p class="lede">Locate latent bias circuits with mechanistic interpretability. Erase them with calibrated rank-one edits. Keep a compliance trail.</p>
+    <p class="lede">For adtech and brand-safety teams running open CLIP on creative ranking or moderation. Measure stereotyped associations, cut them from weights you own, ship a PDF brands accept.</p>
     <div class="hero-cta">
-      <a class="btn btn-solid" href="/signup">Start free workspace</a>
-      <a class="btn btn-line" href="/product">See the method</a>
+      <a class="btn btn-solid" href="/signup">Audit your creative model</a>
+      <a class="btn btn-line" href="/#demo">See ad bias surgery</a>
     </div>
   </div>
 </section>
@@ -56,8 +56,8 @@ __NAV__
 <section class="band pad-x demo-band" id="demo">
   <div class="section-head">
     <div class="kicker">Try it</div>
-    <h2>Watch the surgery, then take the recipe.</h2>
-    <p>Autoplays Measure → Locate → Cut → Prove on a loop. Click any step to jump — autoplay resumes after a moment.</p>
+    <h2>Watch creative bias surgery, then take the recipe.</h2>
+    <p>Defaults to gender×product on CLIP — the failure mode ad teams recognize. Autoplays Measure → Locate → Cut → Prove; click any step to jump.</p>
   </div>
   <div class="livedemo" id="liveDemo" data-phase="measure" aria-label="Surgery walkthrough">
     <div class="ld-head">
@@ -71,11 +71,11 @@ __NAV__
              placeholder="or any Hugging Face model id…" aria-label="Custom Hugging Face model id">
       <label class="ld-bias-label" for="ldBias">Bias</label>
       <select class="ld-bias" id="ldBias" aria-label="Demo bias benchmark">
-        <option value="global_language_prestige">global_language_prestige — language prestige</option>
-        <option value="global_name_valence">global_name_valence — name representation</option>
-        <option value="global_economic_framing">global_economic_framing — North/South framing</option>
-        <option value="ad_gender_product">ad_gender_product — male ↔ female</option>
+        <option value="ad_gender_product" selected>ad_gender_product — gender × product</option>
+        <option value="ad_age_luxury">ad_age_luxury — age × luxury</option>
+        <option value="ad_ethnicity_brand">ad_ethnicity_brand — ethnicity × brand</option>
         <option value="gender_profession">gender_profession — classic WEAT</option>
+        <option value="global_language_prestige">global_language_prestige — language prestige</option>
       </select>
       <span class="ld-model" id="ldModelLabel">ready</span>
       <button class="btn btn-ghost ld-replay" type="button" id="ldReplay" onclick="restartLiveDemo()">Replay</button>
@@ -137,21 +137,21 @@ __NAV__
 <section class="band pad-x" id="need">
   <div class="section-head">
     <div class="kicker">Why Scalpel</div>
-    <h2>Closed APIs will not fix the global divide for you.</h2>
-    <p>If you ship retrieval, ads, or assistants beyond one market, bias in the weights is your risk — and your responsibility.</p>
+    <h2>Built for the team that ships the creative model.</h2>
+    <p>If a brand can lose trust over stereotyped associations in your ranking or moderation stack, you need a cut you own — not a better system prompt.</p>
   </div>
   <div class="trust-row">
     <div class="trust-item">
-      <h3>Language &amp; culture</h3>
-      <p>Models over-associate English-coded speakers with competence. Audit it. Cut it. Spec: global_language_prestige.</p>
+      <h3>Creative associations</h3>
+      <p>Gender×product, age×luxury, ethnicity×brand — the gaps that show up in brand reviews. Audit free; cut on Pro.</p>
     </div>
     <div class="trust-item">
-      <h3>Names &amp; access</h3>
-      <p>Who maps to “CEO” vs “aid recipient” by name alone. Prove the gap on free; ship the edit on Pro.</p>
+      <h3>Open weights you host</h3>
+      <p>CLIP and similar models in adtech already live in your artifact store. Closed chat APIs cannot be surgically edited.</p>
     </div>
     <div class="trust-item">
-      <h3>Own the artifact</h3>
-      <p>Frontier vendors do not hand you edited weights. Scalpel does — with PDF, recipe, and a trail GRC can file.</p>
+      <h3>Proof for the brand pack</h3>
+      <p>PDF, recipe, and optional weight zip — evidence sales and legal can forward when the escalation hits.</p>
     </div>
   </div>
 </section>
@@ -189,8 +189,8 @@ __NAV__
 <section class="band pad-x band-tight-bottom">
   <div class="section-head" style="margin-bottom: 0">
     <div class="kicker">Product</div>
-    <h2>Bias operations, not a notebook.</h2>
-    <p>Queue surgeries, watch association gaps close, and export weights with a trail your GRC team can read.</p>
+    <h2>Bias ops for the ad stack, not a notebook.</h2>
+    <p>Queue surgeries on the models you already serve, watch creative association gaps close, export weights with a trail brands and GRC can read.</p>
   </div>
 </section>
 <div class="console-stage" aria-hidden="true">
@@ -263,10 +263,10 @@ __NAV__
 
 <section class="cta-band">
   <h2>Free audit shows the circuit. Pro ships the cut.</h2>
-  <p>Start on audit-only — see language, name, and economic framing gaps. Upgrade when you need edited weights you can deploy.</p>
+  <p>Start on audit-only — prove gender×product and related creative gaps. Upgrade when you need edited weights for the models in your ad stack.</p>
   <div class="hero-cta" style="animation: none">
-    <a class="btn btn-solid" href="/signup">Start free audit</a>
-    <a class="btn btn-line" href="/product">Why teams pay</a>
+    <a class="btn btn-solid" href="/signup">Audit your creative model</a>
+    <a class="btn btn-line" href="/product">Who this is for</a>
   </div>
 </section>
 

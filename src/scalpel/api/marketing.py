@@ -40,7 +40,7 @@ _FOOTER = """<footer class="site-footer">
   <div class="foot-grid">
     <div class="foot-brand">
       <div class="nav-brand"><span></span>Scalpel</div>
-      <p>Surgical model editing for teams that ship under audit.</p>
+      <p>Bias surgery for adtech teams that ship creative models under brand audit.</p>
     </div>
     <div>
       <h4>Product</h4>
