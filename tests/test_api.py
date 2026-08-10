@@ -227,6 +227,10 @@ def test_marketing_and_console_pages(client):
     assert 'data-view="developers"' in console.text
     assert 'data-view="security"' in console.text
     assert 'id="view-security"' in console.text
+    # New surgery selects must seed without waiting on an API key.
+    assert "FALLBACK_MODELS" in console.text
+    assert "ad_gender_product" in console.text
+    assert "applyCatalog" in console.text
     assert client.get("/static/live-demo.js").status_code == 200
     assert "startLiveDemo" in client.get("/static/live-demo.js").text
 
