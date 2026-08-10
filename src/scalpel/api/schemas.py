@@ -142,7 +142,7 @@ class AuthResponse(BaseModel):
 class PublicDemoRequest(BaseModel):
     """Kick off (or reuse) a public landing-page surgery demo."""
 
-    bias: str = "ad_gender_product"
+    bias: str = "global_language_prestige"
     model_id: str | None = Field(
         default=None,
         description="Any supported Hugging Face model id (CLIP, text encoder, or LM)",

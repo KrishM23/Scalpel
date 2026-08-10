@@ -108,7 +108,7 @@
   }
 
   function selectedBias() {
-    return ($("ldBias") && $("ldBias").value) || "ad_gender_product";
+    return ($("ldBias") && $("ldBias").value) || "global_language_prestige";
   }
   function selectedModel() {
     const custom = ($("ldModelInput") && $("ldModelInput").value || "").trim();
@@ -543,8 +543,8 @@
             `<option value="${b.name}">${b.name} — ${b.groups.join(" ↔ ")}</option>`
           ).join("");
           if ([...$("ldBias").options].some((o) => o.value === cur)) $("ldBias").value = cur;
-          else if ([...$("ldBias").options].some((o) => o.value === "ad_gender_product")) {
-            $("ldBias").value = "ad_gender_product";
+          else if ([...$("ldBias").options].some((o) => o.value === "global_language_prestige")) {
+            $("ldBias").value = "global_language_prestige";
           }
         }
       }

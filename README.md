@@ -150,10 +150,9 @@ SCALPEL_API_ORIGIN=https://api.yourdomain.com python3 scripts/build_netlify.py
 ```
 src/scalpel/
   models/            HF registry + architecture adapters (CLIP / LLM / encoder)
-  biases/            benchmark catalog: gender_profession, ad_gender_product,
-                     ad_age_luxury, ad_ethnicity_brand, age_competence,
-                     ethnicity_valence, religion_valence, disability_competence
-                     + custom specs
+  biases/            catalog: global_language_prestige, global_name_valence,
+                     global_economic_framing, ad_*, gender_profession,
+                     age/ethnicity/religion/disability specs + custom BiasSpec
   interpretability/  activation capture, bias subspace, circuit isolation
   editing/           low-rank projection edits, calibrated surgeon
   evaluation/        WEAT/association metrics, retention metrics

@@ -80,12 +80,15 @@ _STATIC = Path(__file__).parent / "static"
 _SIGNUP_HITS: dict[str, list[float]] = defaultdict(list)
 _DEMO_HITS: dict[str, list[float]] = defaultdict(list)
 
-# Biases the unauthenticated landing demo may run (ads + classic WEAT).
+# Biases the unauthenticated landing demo may run (global divide + ads + WEAT).
 _PUBLIC_DEMO_BIASES = (
-    "gender_profession",
+    "global_language_prestige",
+    "global_name_valence",
+    "global_economic_framing",
     "ad_gender_product",
     "ad_age_luxury",
     "ad_ethnicity_brand",
+    "gender_profession",
 )
 
 
@@ -483,8 +486,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
                 detail=(
-                    f"Plan '{plan.name}' is audit-only. Run mode='audit' to locate the "
-                    "bias circuit, or upgrade to a paid plan to apply edits."
+                    f"Plan '{plan.name}' is audit-only: you can prove the bias circuit "
+                    "exists, but you cannot ship edited weights. Upgrade to Pro to cut "
+                    "the bias out of a model you control — closed APIs will not do this "
+                    "for you. Resubmit with mode='audit' or upgrade to edit."
                 ),
             )
         used = app.state.store.count_jobs_this_month(tenant)
@@ -731,7 +736,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Public live demo is disabled",
             )
-        bias = body.bias if body.bias in _PUBLIC_DEMO_BIASES else "ad_gender_product"
+        bias = (
+            body.bias if body.bias in _PUBLIC_DEMO_BIASES else "global_language_prestige"
+        )
         model_id = (body.model_id or settings.public_demo_model).strip()
         try:
             probe_model(model_id)

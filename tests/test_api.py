@@ -106,11 +106,15 @@ def test_ad_biases_in_catalog(client):
     assert "ad_gender_product" in names
     assert "ad_age_luxury" in names
     assert "ad_ethnicity_brand" in names
+    assert "global_language_prestige" in names
+    assert "global_name_valence" in names
+    assert "global_economic_framing" in names
 
 
 def test_public_demo_live_job_pdf_and_share(client):
     biases = client.get("/v1/public/demo-biases").json()
-    assert any(b["name"] == "ad_gender_product" for b in biases)
+    assert any(b["name"] == "global_language_prestige" for b in biases)
+    assert any(b["name"] == "global_economic_framing" for b in biases)
     models = client.get("/v1/public/demo-models").json()
     assert models["accepts_any_huggingface_id"] is True
     assert models["default_model_id"]
@@ -196,7 +200,7 @@ def test_marketing_and_console_pages(client):
     assert client.get("/pricing").status_code == 404
 
     for path, needle in [
-        ("/product", "From association gap"),
+        ("/product", "You cannot rent fairness"),
         ("/developers", "Two calls to your first"),
         ("/security", "Tenant isolation"),
         ("/privacy", "What we collect"),

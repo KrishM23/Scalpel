@@ -988,6 +988,13 @@ section.band.band-tight-top { padding-top: clamp(1.5rem, 3vh, 2.25rem); }
   font-weight: 500;
   margin-bottom: 0.25rem;
 }
+.prose code, .trust-item code {
+  font: 0.85em/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color: var(--cloud);
+  background: rgba(238, 238, 233, 0.06);
+  padding: 0.1em 0.35em;
+  border-radius: 2px;
+}
 .feature-list span {
   color: var(--muted);
   font-weight: 300;

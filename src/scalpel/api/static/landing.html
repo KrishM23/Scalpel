@@ -71,9 +71,10 @@ __NAV__
              placeholder="or any Hugging Face model id…" aria-label="Custom Hugging Face model id">
       <label class="ld-bias-label" for="ldBias">Bias</label>
       <select class="ld-bias" id="ldBias" aria-label="Demo bias benchmark">
+        <option value="global_language_prestige">global_language_prestige — language prestige</option>
+        <option value="global_name_valence">global_name_valence — name representation</option>
+        <option value="global_economic_framing">global_economic_framing — North/South framing</option>
         <option value="ad_gender_product">ad_gender_product — male ↔ female</option>
-        <option value="ad_age_luxury">ad_age_luxury — young ↔ old</option>
-        <option value="ad_ethnicity_brand">ad_ethnicity_brand — brand valence</option>
         <option value="gender_profession">gender_profession — classic WEAT</option>
       </select>
       <span class="ld-model" id="ldModelLabel">ready</span>
@@ -129,6 +130,28 @@ __NAV__
         <a class="btn btn-line" id="ldArtifact" href="#" hidden>Export weights</a>
       </div>
       <a class="btn btn-solid" id="ldSignup" href="/signup">Run on your model</a>
+    </div>
+  </div>
+</section>
+
+<section class="band pad-x" id="need">
+  <div class="section-head">
+    <div class="kicker">Why Scalpel</div>
+    <h2>Closed APIs will not fix the global divide for you.</h2>
+    <p>If you ship retrieval, ads, or assistants beyond one market, bias in the weights is your risk — and your responsibility.</p>
+  </div>
+  <div class="trust-row">
+    <div class="trust-item">
+      <h3>Language &amp; culture</h3>
+      <p>Models over-associate English-coded speakers with competence. Audit it. Cut it. Spec: global_language_prestige.</p>
+    </div>
+    <div class="trust-item">
+      <h3>Names &amp; access</h3>
+      <p>Who maps to “CEO” vs “aid recipient” by name alone. Prove the gap on free; ship the edit on Pro.</p>
+    </div>
+    <div class="trust-item">
+      <h3>Own the artifact</h3>
+      <p>Frontier vendors do not hand you edited weights. Scalpel does — with PDF, recipe, and a trail GRC can file.</p>
     </div>
   </div>
 </section>
@@ -239,11 +262,11 @@ __NAV__
 </section>
 
 <section class="cta-band">
-  <h2>Open a workspace. Run your first surgery.</h2>
-  <p>Create an account for a tenant API key, or open the console if you already have one.</p>
+  <h2>Free audit shows the circuit. Pro ships the cut.</h2>
+  <p>Start on audit-only — see language, name, and economic framing gaps. Upgrade when you need edited weights you can deploy.</p>
   <div class="hero-cta" style="animation: none">
-    <a class="btn btn-solid" href="/signup">Create account</a>
-    <a class="btn btn-line" href="/app">Open console</a>
+    <a class="btn btn-solid" href="/signup">Start free audit</a>
+    <a class="btn btn-line" href="/product">Why teams pay</a>
   </div>
 </section>
 

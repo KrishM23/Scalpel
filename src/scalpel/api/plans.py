@@ -1,15 +1,22 @@
 """Commercial plans and quota enforcement.
 
-The pricing structure implements the standard land-and-expand motion:
+Land-and-expand is the product: free proves you *need* a cut; paid ships it.
 
-- ``free``       — audit-only. Prospects measure their bias and see exactly
-                   which circuit causes it, but must upgrade to remove it.
-- ``pro``        — full editing, capped monthly volume.
-- ``enterprise`` — unlimited volume (custom contract).
+- ``free``       — audit-only. Measure global-divide / ad / WEAT gaps and see
+                   the circuit. You cannot export edited weights. That pain is
+                   intentional: closed APIs never give you a file you can own.
+- ``pro``        — full Measure→Locate→Cut→Prove, capped monthly volume,
+                   shareable PDF/recipe/weight artifacts for models you deploy.
+- ``enterprise`` — unlimited volume, custom contract, multi-market bias packs.
 
-Tenants are mapped to plans via SCALPEL_TENANT_PLANS ("acme:pro,beta:free");
-unmapped tenants get SCALPEL_DEFAULT_PLAN (default: enterprise, so
-single-tenant self-hosted deployments are unrestricted out of the box).
+Why teams pay: if you ship retrieval, ads, or chat in more than one market,
+an English-centric or North/South valence gap is a brand, legal, and trust
+risk — and prompt wrappers are not an audit trail. Scalpel edits *your*
+weights so mitigation is not rented from a frontier API.
+
+Tenants are mapped via SCALPEL_TENANT_PLANS ("acme:pro,beta:free");
+unmapped tenants get SCALPEL_DEFAULT_PLAN (default: enterprise for
+single-tenant self-host).
 """
 
 from __future__ import annotations
